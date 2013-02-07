@@ -11,3 +11,11 @@ Code for using the fitter and material estimator from the EUTELESCOPE software f
 The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen2. The material and resolution estimator relies on the GNU scientific library for minimization.
 
 The simulation experiments use root for plotting.
+
+Building and running the material estimator:
+
+make estmat
+./estmat <option>
+where option is one of fwbw sdr1 sdr2 sdr3 hybr
+
+This will simulate then estimate the resolution and material distribution of 500 track samples. Takes a long time.
