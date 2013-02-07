@@ -1,23 +1,13 @@
 A straight line track fitter for test beam analysis of pixel partickle detectors.
 
-The implementation contains a Combinatorial Kalman Filter for track finding, as well as
-implementation of the standard formulation of the Kalman Filter, an information matrix
-implementation of the Kalman Filter, and the Deterministic annealing filter. 
+The implementation contains a Combinatorial Kalman Filter for track finding, as well as implementation of the standard formulation of the Kalman Filter, an information matrix implementation of the Kalman Filter, and the Deterministic annealing filter. 
 
-The implementations are template classes, taking the fitter type (double or float), and the
-dimention of the fitter. The implementation currently only works for 4 parameters(straight
-line tracks). Due to optimizations using the code for 5 parameters would require many
-functions to be overloaded, not only in the propagation. 
+The implementations are template classes, taking the fitter type (double or float), and the dimention of the fitter. The implementation currently only works for 4 parameters(straight line tracks). Due to optimizations using the code for 5 parameters would require many functions to be overloaded, not only in the propagation. 
 
-Also contains an implementation of the methods for estimating material and resolutions of
-several detector planes simultaneously, as described in the paper <-> in the class EstMat. An
-application of the method on toy simulated data is also available.
+Also contains an implementation of the methods for estimating material and resolutions of several detector planes simultaneously, as described in the paper <-> in the class EstMat. An application of the method on toy simulated data is also available.
 
-Code for using the fitter and material estimator from the EUTELESCOPE software framework is
-also included.
+Code for using the fitter and material estimator from the EUTELESCOPE software framework is also included.
 
-The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra
-package eigen2. The material and resolution estimator relies on the GNU scientific library
-for minimization.
+The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen2. The material and resolution estimator relies on the GNU scientific library for minimization.
 
 The simulation experiments use root for plotting.

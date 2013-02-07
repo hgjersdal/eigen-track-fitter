@@ -114,3 +114,8 @@ public:
   FwBw(EstMat& mat): Minimizer(mat) {;}
   virtual FITTERTYPE operator()(void);
 };
+
+double normRand();
+void gaussRand(double& x1, double& x2);
+double getScatterSigma(double eBeam, double radLength);
+
