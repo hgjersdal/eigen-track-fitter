@@ -27,6 +27,6 @@ noisesim: noisesim.cc
 simple: simple.cc
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
 
-estmat: estmat6.cc 
+estmat: estmat.cc 
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -DMSE1=1 -o $@ $^ 
 
