@@ -4,7 +4,7 @@ The implementation contains a Combinatorial Kalman Filter for track finding, as 
 
 The implementations are template classes, taking the fitter type (double or float), and the dimention of the fitter. The implementation currently only works for 4 parameters(straight line tracks). Due to optimizations using the code for 5 parameters would require many functions to be overloaded, not only in the propagation. 
 
-Also contains an implementation of the methods for estimating material and resolutions of several detector planes simultaneously, as described in the paper <-> in the class EstMat. An application of the method on toy simulated data is also available.
+Also contains an implementation of the methods for estimating material and resolutions of several detector planes simultaneously, as described in the paper http://dx.doi.org/10.1088/1748-0221/8/01/P01009 in the class EstMat. An application of the method on toy simulated data is also available.
 
 Code for using the fitter and material estimator from the EUTELESCOPE software framework is also included.
 
