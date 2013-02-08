@@ -731,7 +731,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe){
       }
     }
 #if defined(USE_GEAR) //Called from Marlin
-    while (status == GSL_CONTINUE && iter < 10000);
+    while (status == GSL_CONTINUE && iter < 1000);
     break;
 #else  //Called from sim
     while (status == GSL_CONTINUE && iter < nSteps);

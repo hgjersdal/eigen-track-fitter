@@ -19,3 +19,5 @@ make estmat
 where option is one of fwbw sdr1 sdr2 sdr3 hybr
 
 This will simulate then estimate the resolution and material distribution of 500 track samples. Takes a long time.
+
+Note that the material estimator does not work well for electrones. Electrones lose a substantial amount energy through Bremsstrahlung, a highly non Gaussian process. This means the beam energy after material has been traversed in non uniform, and not Gaussianly distributed. Since there is no way of estimating the particle energy from a straight line track, all beam particles must be assumed to have the same amount of scattering, and this is simply not a good approximation. A method that works somewhat, is to use the FWBW estimator on a track sample after a very tight cut on the chi2.
