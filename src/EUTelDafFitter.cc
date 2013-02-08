@@ -89,11 +89,12 @@ using namespace eutelescope;
 
 
 EUTelDafFitter::EUTelDafFitter () : EUTelDafBase("EUTelDafFitter"){
-    //Child spesific params and description
+  //Child spesific params and description
   dafParams();
 }
 
 void EUTelDafFitter::dafParams(){
+  //Parameters for the fitter
   _description = "This processor preforms track reconstruction. The tracks are as final track fit for analysis.";
 
   //Tracker system options
@@ -104,6 +105,7 @@ void EUTelDafFitter::dafParams(){
 }
 
 void EUTelDafFitter::dafInit() {
+  //Enable DUT fitting if configurations demands it
   if(_fitDuts){
     for( size_t ii = 0; ii< _system.planes.size(); ii++){
       if( find(_dutPlanes.begin(), _dutPlanes.end(), _system.planes.at(ii).getSensorID()) != _dutPlanes.end()){ 
@@ -114,6 +116,8 @@ void EUTelDafFitter::dafInit() {
 }
 
 void EUTelDafFitter::dafEvent (LCEvent * event) {
+  //Find, fit and save event tracks
+
   //Prepare track collection
   if(_addToLCIO){
     // Define output track and hit collections
@@ -154,6 +158,8 @@ void EUTelDafFitter::dafEvent (LCEvent * event) {
 }
 
 void EUTelDafFitter::addToLCIO(daffitter::TrackCandidate<float, 4>* track){
+  //Save track to LCIO
+
   TrackImpl * fittrack = new TrackImpl();
   // Impact parameters are useless and set to 0
   fittrack->setD0(0.);        // impact paramter of the track in (r-phi)

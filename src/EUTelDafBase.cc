@@ -142,6 +142,7 @@ EUTelDafBase::EUTelDafBase(std::string name) : marlin::Processor(name) {
 }
 
 bool EUTelDafBase::defineSystemFromData(){
+  //Find three measurements per plane, use these three to define the plane as a point and a normal vector
   bool gotIt = true;
   for(size_t plane = 0; plane < _system.planes.size(); plane++){
     daffitter::FitPlane<float>& pl = _system.planes.at(plane);
@@ -159,9 +160,6 @@ bool EUTelDafBase::defineSystemFromData(){
 	pl.setRef0( Matrix<float, 3, 1>(pl.meas.at(meas).getX(), pl.meas.at(meas).getY(), pl.meas.at(meas).getZ()));
 	_nRef.at(plane)++;
 	gotPlane = false;
-	if(pl.getSensorID() == 10){
-	  cout << "Sensor 10 has 1 hit!" << endl;
-	}
 	continue;
       }
       if( fabs(pl.meas.at(meas).getX() - pl.getRef0()(0) ) < 500) { continue; }
@@ -170,9 +168,6 @@ bool EUTelDafBase::defineSystemFromData(){
 	pl.setRef1( Matrix<float, 3, 1>(pl.meas.at(meas).getX(), pl.meas.at(meas).getY(), pl.meas.at(meas).getZ()));
 	_nRef.at(plane)++;
 	gotPlane = false;
-	if(pl.getSensorID() == 10){
-	  cout << "Sensor 10 has 2 hits!" << endl;
-	}
 	continue;
       }
       if( fabs(pl.meas.at(meas).getX() - pl.getRef1()(0) ) < 500) { continue; }
@@ -193,6 +188,7 @@ bool EUTelDafBase::defineSystemFromData(){
 }
 
 void EUTelDafBase::gearRotate(size_t index, size_t gearIndex){
+  //How does gear totations affect the measurement error
   daffitter::FitPlane<float>& pl = _system.planes.at(index);
 
   double gRotation[3] = { 0., 0., 0.};
@@ -242,6 +238,7 @@ void EUTelDafBase::gearRotate(size_t index, size_t gearIndex){
 } 
 
 Matrix<float, 3, 1> EUTelDafBase::applyAlignment(EUTelAlignmentConstant* alignment, Matrix<float, 3, 1> point){
+  //Apply alignment constants to a point
   Matrix<float, 3, 1> outpoint;
   outpoint(0) = point(0) * (1.0 + alignment->getAlpha())  + alignment->getGamma() * point(1);
   outpoint(1) = point(1) * (1.0 + alignment->getBeta())   - alignment->getGamma() * point(0);
@@ -254,6 +251,7 @@ Matrix<float, 3, 1> EUTelDafBase::applyAlignment(EUTelAlignmentConstant* alignme
 }
 
 void EUTelDafBase::alignRotate(std::string collectionName, LCEvent* event) {
+  //How does the alignment rotations affect measurement errors?
   cout << "Reading in alignment collection " << collectionName << endl;
   LCCollectionVec * alignmentCollectionVec;
   try {
@@ -279,6 +277,7 @@ void EUTelDafBase::alignRotate(std::string collectionName, LCEvent* event) {
   }
 }
 void EUTelDafBase::getPlaneNorm(daffitter::FitPlane<float>& pl){
+  //CAlculate normal vector of plane from ref points
   Matrix<float, 3, 1> l1 = pl.getRef1() - pl.getRef0();
   Matrix<float, 3, 1> l2 = pl.getRef2() - pl.getRef0();
   //Calculate plane normal vector from ref points
@@ -290,6 +289,8 @@ void EUTelDafBase::getPlaneNorm(daffitter::FitPlane<float>& pl){
 }
 
 void EUTelDafBase::init() {
+  //Prepare the tracker system for data
+
   printParameters ();
 
   _iRun = 0; _iEvt = 0; _nTracks = 0; _nClusters =0;
@@ -400,7 +401,7 @@ void EUTelDafBase::processRunHeader (LCRunHeader * rdr) {
 
 
 float EUTelDafBase::getScatterThetaVar( float radLength ){
-  //From pdg live
+  //Get the amount of scattering. From pdg live
   float scatterTheta = 0.0136f/_eBeam * sqrt( radLength ) *  (1.0f + 0.038f * std::log(radLength) );
   return(scatterTheta * scatterTheta);
 }
@@ -426,7 +427,7 @@ size_t EUTelDafBase::getPlaneIndex(float zPos){
 }
 
 void EUTelDafBase::readHitCollection(LCEvent* event){
-  //Dump LCIO hit collection to tracker system
+  //Dump LCIO hit collection event to tracker system
   //Extract hits from collection, add to tracker system
   for(size_t i =0;i < _hitCollectionName.size();i++) {
     try {
@@ -452,6 +453,7 @@ void EUTelDafBase::readHitCollection(LCEvent* event){
 }
 
 bool EUTelDafBase::checkClusterRegion(lcio::TrackerHitImpl* hit, int iden){
+  //Is the hit in a good region of the detector plane?
   bool goodRegion(true);
   if( hit->getType() == kEUTelAPIXClusterImpl ){
     auto_ptr<EUTelVirtualCluster> cluster( new EUTelSparseClusterImpl< EUTelAPIXSparsePixel >
@@ -475,6 +477,7 @@ bool EUTelDafBase::checkClusterRegion(lcio::TrackerHitImpl* hit, int iden){
 }
 
 int EUTelDafBase::checkInTime(daffitter::TrackCandidate<float, 4> * track){
+  //See if DUT hist are in time with track.
   size_t nMatches(0);
   for( size_t ii = 0; ii < _system.planes.size() ; ii++){
     daffitter::FitPlane<float>& plane = _system.planes.at(ii);
@@ -491,6 +494,7 @@ int EUTelDafBase::checkInTime(daffitter::TrackCandidate<float, 4> * track){
 }
 
 void EUTelDafBase::processEvent(LCEvent * event){
+  //Called once per event, read data, fit, save
   EUTelEventImpl * evt = static_cast<EUTelEventImpl*> (event);
   if(event->getEventNumber() % 1000 == 0){
     streamlog_out ( MESSAGE ) << "Accepted " << _nTracks <<" tracks at event " << event->getEventNumber() << endl;
@@ -544,6 +548,7 @@ void EUTelDafBase::processEvent(LCEvent * event){
 }
 
 bool EUTelDafBase::checkTrack(daffitter::TrackCandidate<float, 4> * track){
+  //Check the track quality
   if( track->ndof < _ndofMin) { return(false); }
   n_passedNdof++;
   if( (track->chi2 / track->ndof) > _maxChi2 ) { return(false); }
@@ -554,6 +559,7 @@ bool EUTelDafBase::checkTrack(daffitter::TrackCandidate<float, 4> * track){
 }
 
 void EUTelDafBase::fillPlots(daffitter::TrackCandidate<float, 4>  *track){
+  //Fill event histograms
   _aidaHistoMap["chi2"]->fill( track->chi2);
   _aidaHistoMap["logchi2"]->fill( std::log10(track->chi2));
   _aidaHistoMap["ndof"]->fill( track->ndof);
@@ -589,6 +595,7 @@ void EUTelDafBase::fillPlots(daffitter::TrackCandidate<float, 4>  *track){
 }
 
 void EUTelDafBase::fillDetailPlots(daffitter::TrackCandidate<float, 4>  *track){
+  //Fill event histograms for detailed plots
   for( size_t ii = 0; ii < _system.planes.size() ; ii++){
     daffitter::FitPlane<float>& plane = _system.planes.at(ii);
 
@@ -624,6 +631,7 @@ void EUTelDafBase::fillDetailPlots(daffitter::TrackCandidate<float, 4>  *track){
 }
 
 void EUTelDafBase::bookHistos(){
+  //Init histograms
   int maxNdof = -4 + _system.planes.size() * 2 + 1;
   _aidaHistoMap["chi2"] = AIDAProcessor::histogramFactory(this)->createHistogram1D("chi2", 1000, 0, maxNdof * _maxChi2);
   _aidaHistoMap["logchi2"] = AIDAProcessor::histogramFactory(this)->createHistogram1D("logchi2", 1000, 0, std::log10(maxNdof * _maxChi2));
@@ -656,6 +664,7 @@ void EUTelDafBase::bookHistos(){
 }
 
 void EUTelDafBase::bookDetailedHistos(){
+  //Init more histograms
   for( size_t ii = 0; ii < _system.planes.size() ; ii++){
     daffitter::FitPlane<float>& plane = _system.planes.at(ii);
     char iden[4];
@@ -670,6 +679,7 @@ void EUTelDafBase::bookDetailedHistos(){
 }
 
 void EUTelDafBase::end() {
+  //Call child specific end function, print some info
   dafEnd();
   
   streamlog_out ( MESSAGE ) << endl;

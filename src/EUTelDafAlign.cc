@@ -94,6 +94,7 @@ EUTelDafAlign::EUTelDafAlign () : EUTelDafBase("EUTelDafAlign"){
 }
 
 void EUTelDafAlign::dafParams(){
+  //Parameters for the alignment
   _description = "This processor preforms track reconstruction. The tracks are used for alignment of a partially aligned system.";
 
   //Millepede options
@@ -130,6 +131,7 @@ void EUTelDafAlign::dafParams(){
 }
 
 void EUTelDafAlign::dafInit() {
+  //Initialize the aligner
   for(size_t ii = 0; ii < _translate.size(); ii++){
     _translateX.push_back( _translate.at(ii) );
     _translateY.push_back( _translate.at(ii) );
@@ -160,6 +162,7 @@ void EUTelDafAlign::dafInit() {
 }
 
 int EUTelDafAlign::checkDutResids(daffitter::TrackCandidate<float, 4> * track){
+  //Check DUT residuals with user supplied residual cuts
   int nHits(0);
   _dutMatches.clear();
   for( size_t ii = 0; ii < _system.planes.size() ; ii++){
@@ -232,6 +235,8 @@ void EUTelDafAlign::dafEvent (LCEvent * event) {
 }
 
 void EUTelDafAlign::addToMille(daffitter::TrackCandidate<float, 4> * track){
+  //Add the track parameter derivatives to Mille.
+
   const int nLC = 4; //number of local parameters
   const int nGL = _system.planes.size() * 6; // number of global parameters
   
@@ -295,6 +300,7 @@ void EUTelDafAlign::addToMille(daffitter::TrackCandidate<float, 4> * track){
 
 
 void EUTelDafAlign::generatePedeSteeringFile(){
+  //Generate the steeting file for pede
   ofstream steerFile;
   steerFile.open(_pedeSteerfileName.c_str());
   if (not steerFile.is_open()) {
@@ -338,6 +344,7 @@ void EUTelDafAlign::steerLine(ofstream &steerFile, int label, int iden, std::vec
 }
 
 void EUTelDafAlign::runPede(){
+  //Run the pede job, parse and save the results
   std::string command = "pede " + _pedeSteerfileName;
   // create a new process
   redi::ipstream which("which pede");
@@ -462,6 +469,7 @@ void EUTelDafAlign::runPede(){
 }
 
 void EUTelDafAlign::dafEnd() {
+  //Generate steering file and start the job
   if(not _runPede){ return; }
   delete _mille;
   generatePedeSteeringFile();
