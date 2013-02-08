@@ -304,10 +304,10 @@ void EUTelDafMaterial::dafEnd() {
   std::cout << "Starting estimation assuming beam energy of " << _eBeam << std::endl;
   _matest.plot((char*) "/home/haavagj/preestmat.root");
   
-  //Minimizer* minimize = new FwBw(_matest); //FWBW
-  Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
+  // Minimizer* minimize = new FwBw(_matest); //FWBW
+  // Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
   // Minimizer* minimize = new SDR(false,true,false,_matest); //SDR2
-  // Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3
+  Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3
   _matest.simplexSearch(minimize);
   
   // FwBw* minimize = new FwBw(_matest); //FWBW
