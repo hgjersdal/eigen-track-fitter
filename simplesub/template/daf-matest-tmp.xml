@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
+<!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
+
+<!-- 
+
+==========================================================================================
+Steering file template for the pysub framework
+
+==> fitter-tmp.xml <===
+
+Author: Antonio Bulgheroni, INFN <mailto:antonio.bulgheroni@gmail.com>
+Version: $Id: fitter-tmp.xml,v 1.7 2009-08-01 13:59:45 bulgheroni Exp $
+==========================================================================================
+
+--> 
+
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+
+  <execute>
+    <processor name="AIDA"/>
+    <processor name="LoadAlignmentTel"/>
+    <processor name="ApplyAlignmentTel"/>
+    <processor name="LoadAlignmentDut"/>
+    <processor name="ApplyAlignmentDut"/>
+    <processor name="DafFitter"/>
+  </execute>
+
+  <global>
+    <parameter name="LCIOInputFiles">@AlignInputFiles@ </parameter>
+    <parameter name="GearXMLFile" value="@GearFile@"/>
+    <parameter name="MaxRecordNumber" value="@RecordNumber@"/>
+    <parameter name="SkipNEvents" value="@SkipNEvents@"/>
+    <parameter name="SupressCheck" value="false"/>
+    <parameter name="Verbosity" value="MESSAGE"/>
+  </global>
+
+
+  <processor name="AIDA" type="AIDAProcessor">
+    <!--Processor that handles AIDA files. Creates on directory per processor.  Processors only need to create and fill the histograms, clouds and tuples. Needs to be the first ActiveProcessor-->
+    <!-- compression of output file 0: false >0: true (default) -->
+    <parameter name="Compress" type="int" value="1"/>
+    <!-- filename without extension-->
+    <parameter name="FileName" type="string" value= "@HistoPath@/run@RunNumber@-daf-histo"/>
+    <!-- type of output file xml (default) or root ( only OpenScientist)-->
+    <parameter name="FileType" type="string" value="root"/>
+  </processor>
+
+  <processor name="LoadAlignmentTel" type="ConditionsProcessor">
+    <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>
+    <parameter name="SimpleFileHandler" type="StringVec"> alignmenttel @DbPath@/@TelAlignmentDb@ alignment </parameter>
+  </processor>
+
+  <processor name="LoadAlignmentDut" type="ConditionsProcessor">
+    <parameter name="DBInit" type="string" value="localhost:lccd_test:align:dut"/>
+    <parameter name="SimpleFileHandler" type="StringVec"> alignmentdut @DbPath@/@DutAlignmentDb@ alignment </parameter>
+  </processor>
+
+  <processor name="ApplyAlignmentTel" type="EUTelAPIXApplyAlignment">
+    <parameter name="AlignmentConstantName" type="string" lcioInType="LCGenericObject"> alignmenttel </parameter>
+    <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit"> hit </parameter>
+    <parameter name="OutputHitCollectionName" type="string" lcioOutType="TrackerHit"> alignedTelHit</parameter>
+    <parameter name="CorrectionMethod" type="int" value="1"/>
+    <!--Enable or disable histograms-->
+    <parameter name="HistogramSwitch" type="bool" value="false"/>
+  </processor>
+
+  <processor name="ApplyAlignmentDut" type="EUTelAPIXApplyAlignment">
+    <parameter name="AlignmentConstantName" type="string" lcioInType="LCGenericObject"> alignmentdut </parameter>
+    <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit"> alignedTelHit </parameter>
+    <parameter name="OutputHitCollectionName" type="string" lcioOutType="TrackerHit"> alignedHit</parameter>
+    <parameter name="CorrectionMethod" type="int" value="1"/>
+    <parameter name="HistogramSwitch" type="bool" value="false"/>
+  </processor>
+
+  <processor name="DafFitter" type="EUTelDafMaterial">
+    <parameter name="MinCol" type="intvec"> @ColMin@ </parameter>
+    <parameter name="MaxCol" type="intvec"> @ColMax@ </parameter>
+    <parameter name="MinRow" type="intvec"> @RowMin@ </parameter>
+    <parameter name="MaxRow" type="intvec"> @RowMax@ </parameter>
+    <parameter name="ResidualXMin" type="intvec"> @ResidualXMin@ </parameter>
+    <parameter name="ResidualXMax" type="intvec"> @ResidualXMax@ </parameter>
+    <parameter name="ResidualYMin" type="intvec"> @ResidualYMin@ </parameter>
+    <parameter name="ResidualYMax" type="intvec"> @ResidualYMax@ </parameter>
+
+    <parameter name="TrackAsciiName" type="string" value="run@RunNumber@-ascii.txt"/>
+    <parameter name="MakePlots" type="bool" value="@MakePlots@"/>
+    <parameter name="TelescopePlanes" type="IntVec"> @TelescopePlanes@ </parameter> 
+    <parameter name="DutPlanes" type="IntVec"> @DutPlanes@ </parameter>
+    <parameter name="Ebeam" type="float" value="@BeamEnergy@"/>
+    <parameter name="TelResolutionX" type="float" value="@TelResolution@"/>
+    <parameter name="TelResolutionY" type="float" value="@TelResolution@"/>
+    <parameter name="DutResolutionX" type="float" value="@DutResolutionX@"/>
+    <parameter name="DutResolutionY" type="float" value="@DutResolutionY@"/>
+
+    <parameter name="NominalDxdz" type="float" value="@NominalDxdz@"/>
+    <parameter name="NominalDydz" type="float" value="@NominalDydz@"/>
+
+    <parameter name="FinderRadius" type="float" value="@FinderRadius@"/>
+    <parameter name="Chi2Cutoff" type="float" value="@Chi2Cutoff@"/>
+    <parameter name="RequireNTelPlanes" type="float" value="@RequireNTelPlanes@"/>
+    <parameter name="MaxChi2OverNdof" type="float" value="@MaxChi2OverNdof@"/>
+    <parameter name="HitCollectionName" type="string" lcioInType="TrackerHit"> alignedHit </parameter>
+
+    <parameter name="RadiationLengths" type="floatVec"> @RadiationLengths@ </parameter>
+    <parameter name="ResolutionX" type="floatVec"> @ResolutionX@ </parameter>
+    <parameter name="ResolutionY" type="floatVec"> @ResolutionY@ </parameter>
+    <parameter name="XShift" type="floatVec"> @XShift@ </parameter>
+    <parameter name="YShift" type="floatVec"> @YShift@ </parameter>
+    <parameter name="XScale" type="floatVec"> @XScale@ </parameter>
+    <parameter name="YScale" type="floatVec"> @YScale@ </parameter>
+    <parameter name="ZRot" type="floatVec"> @ZRot@ </parameter>
+    <parameter name="ZPos" type="floatVec"> @ZPos@ </parameter>
+
+    <parameter name="RadLengthIndex" type="floatVec"> @RadLengthIndex@ </parameter>
+    <parameter name="ResXIndex" type="floatVec"> @ResXIndex@ </parameter>
+    <parameter name="ResYIndex" type="floatVec"> @ResYIndex@ </parameter>
+    <parameter name="ShiftXIndex" type="floatVec"> @ShiftXIndex@ </parameter>
+    <parameter name="ShiftYIndex" type="floatVec"> @ShiftYIndex@ </parameter>
+    <parameter name="ScaleXIndex" type="floatVec"> @ScaleXIndex@ </parameter>
+    <parameter name="ScaleYIndex" type="floatVec"> @ScaleYIndex@ </parameter>
+    <parameter name="ZRotIndex" type="floatVec"> @ZRotIndex@ </parameter>
+    <parameter name="ZPosIndex" type="floatVec"> @ZPosIndex@ </parameter>
+
+    <parameter name="AlignmentCollectionNames"> alignmenttel alignmentdut </parameter>
+    <parameter name="NDutHits" type="int" value="@NDutHits@"/>
+  </processor>
+</marlin>
