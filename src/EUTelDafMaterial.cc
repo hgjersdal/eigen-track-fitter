@@ -255,13 +255,13 @@ void EUTelDafMaterial::dafEvent (LCEvent * event) {
 }
 
 void EUTelDafMaterial::dafEnd() {
-  //Get average angles
+  //Add planes to material estimator fitter
   for( size_t ii = 0; ii< _system.planes.size(); ii++){
-    //Add plane to material estimator fitter
     _system.planes.at(ii).include();
     _matest.addPlane(_system.planes.at(ii));
   }
 
+  //These tracks have already been found, use very wide cuts.
   _matest.system.setClusterRadius( 10000.0f);
   _matest.system.setNominalXdz(0.0f);
   _matest.system.setNominalYdz(0.0f);
@@ -271,6 +271,7 @@ void EUTelDafMaterial::dafEnd() {
       
   _matest.plot((char*) "/home/haavagj/noalign.root");
 
+  //Initialize EstMat from configuration vectors. These are the alignment parameters
   for(size_t ii = 0; ii < _xShift.size(); ii++){ _matest.xShift.at(ii) = _xShift.at(ii); }
   for(size_t ii = 0; ii < _yShift.size(); ii++){ _matest.yShift.at(ii) = _yShift.at(ii); }
   for(size_t ii = 0; ii < _xScale.size(); ii++){ _matest.xScale.at(ii) = _xScale.at(ii); }
@@ -284,10 +285,10 @@ void EUTelDafMaterial::dafEnd() {
     _matest.movePlaneZ(ii, _zPos.at(ii));
   }
 
+  //Initialize the EstMat free parameters from configuration
   _matest.resXIndex = _resXIndex;
   _matest.resYIndex = _resYIndex;
   _matest.radLengthsIndex = _radLengthIndex;
-
   _matest.xShiftIndex = _shiftXIndex;
   _matest.yShiftIndex = _shiftYIndex;
   _matest.xScaleIndex = _scaleXIndex;
@@ -295,24 +296,32 @@ void EUTelDafMaterial::dafEnd() {
   _matest.zRotIndex = _zRotIndex;
   _matest.zPosIndex = _zPosIndex;
 
+  //Initial state of resolutoins ans radiation lengths
   for(size_t ii = 0; ii < _radLength.size(); ii++){
     _matest.radLengths.at(ii) = _radLength.at(ii); 
     _matest.resX.at(ii) = _system.planes.at(ii).getSigmaX();
     _matest.resY.at(ii) = _system.planes.at(ii).getSigmaY();
   }
-
-  std::cout << "Starting estimation assuming beam energy of " << _eBeam << std::endl;
-  _matest.plot((char*) "/home/haavagj/preestmat.root");
   
+  std::cout << "Starting estimation assuming beam energy of " << _eBeam << std::endl;
+  //_matest.plot((char*) "/home/haavagj/preestmat.root");
+  
+  //Start minimization
   // Minimizer* minimize = new FwBw(_matest); //FWBW
   // Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
   // Minimizer* minimize = new SDR(false,true,false,_matest); //SDR2
   Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3
-  _matest.simplexSearch(minimize);
-  
+  _matest.simplexSearch(minimize, 500, 3);
+
   // FwBw* minimize = new FwBw(_matest); //FWBW
-  // _matest.quasiNewtonHomeMade(minimize);
+  // _matest.quasiNewtonHomeMade(minimize, 40);
+
+
+  //Use this for alignment only. 
+  // Minimizer* minimize = new Chi2(_matest); //Alignment
+  //_matest.quasiNewtonHomeMade(minimize, 1000);
   
-  _matest.plot((char*) "/home/haavagj/estmat.root");
+  //Plot the resulting pulls, residuals, chi2s
+  //_matest.plot((char*) "/home/haavagj/estmat.root");
 }
 #endif // USE_GEAR

@@ -33,7 +33,7 @@ mat.radLengthsIndex.push_back(4);
 mat.radLengthsIndex.push_back(5);
 }
 
-void simulateTracks(EstMat& mat){
+void simulateTracks(EstMat& mat, int nTracks){
   //Set up the nominal thicknesses and resolution
   //TEL
   for(int ii = 0; ii < mat.system.planes.size(); ii++){
@@ -52,7 +52,7 @@ void simulateTracks(EstMat& mat){
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
   mat.tracks.clear();
-  mat.simulate( 40000 );
+  mat.simulate( nTracks );
   std::cout << "Done simulating" << endl;
 }
 
@@ -82,6 +82,9 @@ int main(int argc, char* argv[]){
   //Configure system, simulate tracks, and estimate material and resolution
   double ebeam = 40.0;
   int nPlanes = 9;
+  int nTracks = 40000;
+  int numberOfExperiments = 500; //How many simulation + estimation estimates should be preformed
+
   EstMat mat;
   mat.init(ebeam, nPlanes); //Initialize the the estimator
   mat.initSim(nPlanes); //Initialize the simulation
@@ -114,10 +117,10 @@ int main(int argc, char* argv[]){
   estimationParameters(mat);
 
   //For each outeriter, a track sample will be simulated, and the system parameters will be estimated
-  for(int outeriter = 0; outeriter < 500 ; outeriter ++){
+  for(int outeriter = 0; outeriter < numberOfExperiments; outeriter ++){
     cout << "Outer iteration " << outeriter << endl;
     
-    simulateTracks(mat); //Configure true state in this function
+    simulateTracks(mat, nTracks); //Configure true state in this function
     initialGuess(mat); //Configure the tracker system from initial guesses
 
     //Set up the material estimation from the Tracker System
@@ -135,33 +138,35 @@ int main(int argc, char* argv[]){
     }
 
     //Parsing argument, doing minimization
+    int iterations = 300; //How many iterations per restart?
+    int restarts = 3; // How many times should the simplex search be restarted?
     if(argc < 2) {
       cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3 or hybr" << endl;
       return(1);
     } else if(strcmp(argv[1], "fwbw") == 0){
       cout << "Starting minimization of type fwbw" << endl;
       Minimizer* minimize = new FwBw(mat);
-      mat.simplexSearch(minimize);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr1") == 0){
       cout << "Starting minimization of type SDR1" << endl;
       Minimizer* minimize = new SDR(true,false,false,mat);
-      mat.simplexSearch(minimize);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr1c") == 0){
       cout << "Starting minimization of type SDR1c" << endl;
       Minimizer* minimize = new SDR(true,false,true,mat);
-      mat.simplexSearch(minimize);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr2") == 0){
       cout << "Starting minimization of type SDR2" << endl;
       Minimizer* minimize = new SDR(false,true,false,mat);
-      mat.simplexSearch(minimize);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr3") == 0){
       cout << "Starting minimization of type SDR3" << endl;
       Minimizer* minimize = new SDR(true,true,false,mat);
-      mat.simplexSearch(minimize);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "hybr") == 0){
       cout << "Starting minimization of type hybr" << endl;
       FwBw* minimize = new FwBw(mat);
-      mat.quasiNewtonHomeMade(minimize);
+      mat.quasiNewtonHomeMade(minimize, 40);
     } else {
       cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3 or hybr" << endl;
       return(1);

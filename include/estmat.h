@@ -75,8 +75,8 @@ public:
   void estToSystem( const gsl_vector* params);
   gsl_vector* systemToEst();
   gsl_vector* simplesStepSize();
-  void simplexSearch(Minimizer* minimizeMe);
-  void quasiNewtonHomeMade(FwBw* minimizeMe);
+  void simplexSearch(Minimizer* minimizeMe, int iterations, int restarts);
+  void quasiNewtonHomeMade(FwBw* minimizeMe, int iterations);
   
   int itMax;
   void readTrack(int track);

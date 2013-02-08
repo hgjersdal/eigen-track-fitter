@@ -661,7 +661,7 @@ double estimateSimplex(const gsl_vector* v, void * params){
   return((*minimize)());
 }
 
-void EstMat::simplexSearch(Minimizer* minimizeMe){
+void EstMat::simplexSearch(Minimizer* minimizeMe, int iterations, int restarts){
   //Do the simplex search on the configured Minimizer object
   cout << "Initial guesses" << endl;
   printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
@@ -671,10 +671,8 @@ void EstMat::simplexSearch(Minimizer* minimizeMe){
   printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
   
   itMax = tracks.size();
-
-  for(int ii = 0; ii < 3; ii++){
-    size_t nSteps = 200;
-    if( ii == 2){ nSteps = 600; }
+  
+  for(int ii = 0; ii < restarts; ii++){
     const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
     gsl_multimin_fminimizer *s = NULL;
     gsl_vector *ss, *x;
@@ -730,12 +728,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe){
 	printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
       }
     }
-#if defined(USE_GEAR) //Called from Marlin
-    while (status == GSL_CONTINUE && iter < 1000);
-    break;
-#else  //Called from sim
-    while (status == GSL_CONTINUE && iter < nSteps);
-#endif
+    while (status == GSL_CONTINUE && iter < iterations);
     gsl_vector_free(x);
     gsl_vector_free(ss);
     gsl_multimin_fminimizer_free (s);
@@ -743,7 +736,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe){
   }
 }
 
-void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe){
+void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
   // Successive steps in Newtons method to find the minimum
   cout << "Initial guesses" << endl;
   printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
@@ -760,7 +753,7 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe){
   size_t resSize = resXIndex.size() + resYIndex.size();
   cout << "resSize " << resSize << endl;
 
-  for(int iteration  = 0; iteration < 40; iteration++){
+  for(int iteration  = 0; iteration < iterations; iteration++){
     cout << "it " << iteration << endl;
     for(size_t ii = 0; ii < nParams; ii++){
       bool doMse = (ii < resSize);// and (iteration > 5); 
