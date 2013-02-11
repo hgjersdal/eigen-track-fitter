@@ -24,4 +24,6 @@ Note that the material estimator does not work well for electrons. Electrons los
 
 Another important thing to note is that the plane thickness is treated as uniform across an infinite detector plane. The geometry does not take into account that outside the sensor chip, there is another thickness or no material at all. This method should find the optimal scattering variance for tracks passing through ALL sensor chips, if the material across the active region is uniform. If a track passes outside the sensor chip, the amount of material is not correctly estimated. This should be fairly straight forward to improve with a more advanced geometry description. It might even work if the planes are non infinite in the fitter code, and one uses passive planes in GEAR.
 
+The amount of material in the plane is not really what is being optimized, the amount of scattering that occurs in the plane is. This is presented in X/X_0, but the X/X_0 value will probably be somewhat biased, since energy loss of the particle is not taken into account by the fitter.
+
 All telescope and DUT planes must be included in the tracks fed to the material estimator. 

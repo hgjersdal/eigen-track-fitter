@@ -297,7 +297,7 @@ namespace minimize_workers{
 
 void Minimizer::init(){
   //Initialize 4 threads
-#ifndef DOTHREADS
+#ifndef DOTHREAD
   cout << "Not using threads!" << endl;
   nThreads = 1;
 #endif
@@ -815,7 +815,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
 
       if(iter % 10 == 0){
 	cout << "Iteration " << iter << endl;
-	printf ("%5d %10.3e %10.3e f() = %7.3f size = %.7f\n", 
+	printf ("%5d %10.3e %10.3e f() = %7.7f size = %.7f\n", 
 		(int)iter,
 		gsl_vector_get (s->x, 0), 
 		gsl_vector_get (s->x, 1), 
