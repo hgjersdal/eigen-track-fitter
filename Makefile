@@ -1,6 +1,7 @@
 CXX          = g++
-CXXFLAGS     = -g -fPIC -msse3 -O3 -I/usr/include/eigen2 -I./include -lgsl -lgslcblas -DNDEBUG
-#CXXFLAGS     = -g -fPIC -msse3 -O0 -I/usr/include/eigen2 -I./ -lgsl -lgslcblas 
+CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen2 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread -DNDEBUG -DDOTHREAD
+#CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen2 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread -DNDEBUG
+
 LD           = g++
 LDFLAGS      = -g -L.
 
@@ -19,4 +20,4 @@ simple: simple.cc
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
 
 estmat: estmatapp.cc ./src/estmat.cc 
-	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -DMSE1=1 -o $@ $^ 
+	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 

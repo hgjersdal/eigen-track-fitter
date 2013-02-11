@@ -73,6 +73,18 @@ TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_
   ;
 }
 
+template <typename T, size_t N>
+TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(false), m_maxCandidates(1), 
+								    m_minClusterSize(sys.m_minClusterSize), m_nXdz(sys.m_nXdz),
+								    m_nYdz(sys.m_nYdz) {
+  cout << "Cloning tracker system:" << endl;
+  for(size_t ii = 0; ii < sys.planes.size(); ii++){
+    const FitPlane<T>& pl = sys.planes.at(ii);
+    this->addPlane(pl.getSensorID(), pl.getZpos(), pl.getSigmaX(), pl.getSigmaY(), pl.getScatterThetaSqr(), pl.isExcluded());
+  }
+  this->init();
+}
+
 template <typename T,size_t N>
 inline Matrix<T, 2, 1> TrackerSystem<T, N>::getBiasedResidualErrors(FitPlane<T>& pl, TrackEstimate<T, N>* est){
   //Get covariance matrix diagonal vector for biased residuals: distance from filtered/updated estimate to measurement
@@ -89,15 +101,6 @@ template <typename T,size_t N>
 inline Matrix<T, 2, 1> TrackerSystem<T, N>::getResiduals(Measurement<T>& m, TrackEstimate<T, N>* est){
   //Vector of distances from estimate to measurementx
   return( m.getM() - est->params.start(2));
-}
-
-template <typename T,size_t N>
-void TrackerSystem<T, N>::setTruth(int plane, T x, T y, T xdz, T ydz){
-  //Store the true track parameters from simulation
-  mcTruth.at(plane)->params(0) = x;
-  mcTruth.at(plane)->params(1) = y;
-  mcTruth.at(plane)->params(2) = xdz;
-  mcTruth.at(plane)->params(3) = ydz;
 }
 
 template <typename T,size_t N>
@@ -131,10 +134,8 @@ void TrackerSystem<T, N>::init(){
   //  - All planes are sorted by z position, information about the planes are printed to screen.
   //  - Memory is allocated for track candidates and MC truth
   sort(planes.begin(), planes.end(), planeSort<T>);
-  mcTruth.resize(planes.size());
   for(int ii = 0; ii < (int) planes.size(); ii++){
     planes.at(ii).print();
-    mcTruth.at(ii) = new TrackEstimate<T, N>();
   }
   m_fitter = new EigenFitter<T, N>( planes.size() );
   tracks.resize( m_maxCandidates);
@@ -189,6 +190,17 @@ int TrackerSystem<T, N>::addNeighbors(vector<PlaneHit<T> > &candidate, list<Plan
     }
   }
   return (counter);
+}
+
+template <typename T,size_t N>
+void TrackerSystem<T, N>::index0tracker(){
+  //Create a track candidate, ehere every plane has a hit with index 0. Used by EstMat.
+  TrackCandidate<T, N>* cnd = tracks[0];
+  cnd->ndof = 0;
+  cnd->chi2 = 0.0f;
+  for(size_t ii = 0; ii < planes.size(); ii++){
+    cnd->indexes[ii] = 0;
+  }
 }
 
 template <typename T,size_t N>

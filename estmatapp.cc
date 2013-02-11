@@ -83,7 +83,7 @@ int main(int argc, char* argv[]){
   double ebeam = 40.0;
   int nPlanes = 9;
   int nTracks = 40000;
-  int numberOfExperiments = 500; //How many simulation + estimation estimates should be preformed
+  int numberOfExperiments = 100; //How many simulation + estimation estimates should be preformed
 
   EstMat mat;
   mat.init(ebeam, nPlanes); //Initialize the the estimator

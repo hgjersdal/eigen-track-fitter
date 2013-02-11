@@ -3,6 +3,11 @@
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
 
+#if DOTHREAD
+#include <boost/thread.hpp>
+#include <boost/thread/detail/thread_group.hpp>
+#endif
+
 double getScatterSigma(double eBeam, double radLength){
   //Highland formula
   radLength = fabs(radLength);
@@ -34,21 +39,23 @@ void EstMat::readTrack(int track){
   }
 }
 
-FITTERTYPE Chi2::operator() (){
-  //Get the global chi2 of the track sample
-  double chi2(0.0);
-  for(int track = 0; track < mat.itMax; track++){
-    mat.system.clear();
-    mat.readTrack(track);
-    mat.system.clusterTracker();
-    for(size_t ii = 0; ii < mat.system.getNtracks(); ii++ ){
-      mat.system.weightToIndex(mat.system.tracks.at(ii));
-      mat.system.fitInfoFWBiased(mat.system.tracks.at(ii));
-      mat.system.getChi2BiasedInfo(mat.system.tracks.at(ii));
-      chi2 += mat.system.tracks.at(ii)->chi2;
+void EstMat::readTrack(int track, TrackerSystem<FITTERTYPE, 4>& system){
+  //Read a track into the tracker system into memory
+  for(size_t meas = 0; meas < tracks.at(track).size(); meas++){
+    Measurement<FITTERTYPE>& m1 = tracks.at(track).at(meas);
+    for(size_t ii = 0; ii < system.planes.size(); ii++){
+      if( (int) m1.getIden() == (int) system.planes.at(ii).getSensorID()){
+	double x = m1.getX() * ( 1.0 + xScale.at(ii)) + m1.getY() * zRot.at(ii);
+	double y = m1.getY() * ( 1.0 + yScale.at(ii)) - m1.getX() * zRot.at(ii);
+	x += xShift.at(ii);
+	y += yShift.at(ii); 
+	
+	double z = m1.getZ();
+	system.addMeasurement(ii, x, y, z, true, m1.getIden());
+	break;
+      }
     }
   }
-  return(chi2);
 }
 
 void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
@@ -67,38 +74,61 @@ void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   // estim->params(3) = estim->cov(3,3) * dy+ estim->cov(3,1) * y;
 } 
 
-FITTERTYPE SDR::operator() (){
-  // Standardized residuals deviance from mean = 0 and variance = 1.
-  // Either the difference between the FW and BW sates(SRD1=true),
-  // the pull distributions in FW and BW (SDR2=true) or both (SRD1 and SDR2)
-  TrackerSystem<FITTERTYPE,4>& system = mat.system;
-  std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
-  std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) ); 
+namespace minimize_workers{
+  void Chi2_worker(Chi2* chi2, size_t offset, size_t stride){
+    //Get the global chi2 of the track sample
+    TrackerSystem<FITTERTYPE,4>& system = chi2->systems.at(offset);
+
+    //Track candidate is the same for all tracks
+    system.index0tracker();
+
+    double varchi2(0.0);
+    for(int track = offset; track < chi2->mat.itMax; track+= stride){
+      system.clear();
+      chi2->mat.readTrack(track, system);
+      size_t ii = 0;
+      system.fitInfoFWBiased(system.tracks.at(ii));
+      system.getChi2BiasedInfo(system.tracks.at(ii));
+      varchi2 += system.tracks.at(ii)->chi2;
+    }
+    chi2->results[offset] = varchi2;
+  }
   
-  int nTracks = 0;
-  for(int track = 0; track < mat.itMax; track++){
-    //prepare system for new track: clear system from prev go around, read track from memory, run track finder
-    system.clear();
-    mat.readTrack(track);
-    system.clusterTracker();
-    for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
+  void SDR_worker(SDR* sdr, size_t offset, size_t stride){
+    TrackerSystem<FITTERTYPE,4>& system = sdr->systems.at(offset);
+    std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
+    std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) );
+    int nTracks = 0;
+    
+    //Track candidate is the same for all tracks
+    system.index0tracker();
+
+    for(int track = offset; track < sdr->mat.itMax; track += stride){
+      //prepare system for new track: clear system from prev go around, read track from memory, run track finder
+      system.clear();
+      sdr->mat.readTrack(track, system);
+      
+      //Only one track! Skip track finder
+      //system.clusterTracker();
+      //for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
+      size_t ii = 0;
       //Transkate DAF track candidate to KF candidate
-      system.weightToIndex(system.tracks.at(ii));
+      //system.weightToIndex(system.tracks.at(ii));
       //Run FW fitter, get p-values
       system.fitInfoFWBiased(system.tracks.at(ii));
       system.fitInfoBWUnBiased(system.tracks.at(ii));
       //Get explicit estimates
       TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
-      mat.getExplicitEstimate(fw1);
-
+      sdr->mat.getExplicitEstimate(fw1);
+      
       for(size_t pl = 0; pl < system.planes.size() -2; pl++){
 	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
 	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	mat.getExplicitEstimate(fw);
-	mat.getExplicitEstimate(bw);
+	sdr->mat.getExplicitEstimate(fw);
+	sdr->mat.getExplicitEstimate(bw);
       }
       //Chi2 increments FW
       for(size_t pl = 2; pl < system.planes.size(); pl++){
@@ -124,7 +154,7 @@ FITTERTYPE SDR::operator() (){
 	sqrPullYBW.at(pl) += pull2(1);
       }
       //Difference in parameters
-      if(not cholDec){
+      if(not sdr->cholDec){
 	for(size_t pl = 1; pl < system.planes.size() -2; pl++){
 	  TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
 	  TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
@@ -153,65 +183,62 @@ FITTERTYPE SDR::operator() (){
       }
       nTracks++;
     }
-  }
-  
-  double varvar(0.0);
-  if(SDR2){
-    for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
-      double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
-      varvar += resvar * resvar;
-      resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
-      varvar += resvar * resvar;
-      resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
-      varvar += resvar * resvar;
-      resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
-      varvar += resvar * resvar;
-    }
-  }
-  if(SDR1){
-    for( int pl = 1; pl < system.planes.size() - 2; pl++){
-      for(int param = 0; param < 4; param++){
-	double resvar = 1.0 - (sqrParams.at(pl - 1).at(param) / (nTracks - 1));
+    
+    double varvar(0.0);
+    if(sdr->SDR2){
+      for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
+	double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
+	varvar += resvar * resvar;
+	resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
+	varvar += resvar * resvar;
+	resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
+	varvar += resvar * resvar;
+	resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
 	varvar += resvar * resvar;
       }
     }
+    if(sdr->SDR1){
+      for( size_t pl = 1; pl < system.planes.size() - 2; pl++){
+	for(int param = 0; param < 4; param++){
+	  double resvar = 1.0 - (sqrParams.at(pl - 1).at(param) / (nTracks - 1));
+	  varvar += resvar * resvar;
+	}
+      }
+    }
+    sdr->results.at(offset) = varvar;
   }
-  // SDR3, is 1 + 2
-  return(varvar);
-}
 
-FITTERTYPE FwBw::operator() (){
-  // The min log likelihood of the state difference between the FW and BW fit.
-  TrackerSystem<FITTERTYPE,4>& system = mat.system;
-  
-  double logL(0.0);
-  std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
-  std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
-  std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) ); 
-  int nTracks = 0;
+  void FwBw_worker(FwBw* fwbw, size_t offset, size_t stride){
+    TrackerSystem<FITTERTYPE,4>& system = fwbw->systems.at(offset);
+    
+    //Track candidate is the same for all tracks
+    system.index0tracker();
+    
+    double logL(0.0);
+    std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
+    std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
+    std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) ); 
+    int nTracks = 0;
 
-  //loop over tracks
-  for(int track = 0; track < mat.itMax; track++){
-    system.clear();
-    mat.readTrack(track);
-    system.clusterTracker();
-    //Loop over track candidates
-    for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
+    for(int track = offset; track < fwbw->mat.itMax; track += stride){
+      //prepare system for new track: clear system from prev go around, read track from memory, run track finder
+      system.clear();
+      fwbw->mat.readTrack(track,system);
+      size_t ii = 0;
       nTracks++;
       //Translate candidate from DAF to KF
-      system.weightToIndex(system.tracks.at(ii));
       system.fitInfoFWBiased(system.tracks.at(ii));
       system.fitInfoBWUnBiased(system.tracks.at(ii));
       //Get explicit estimates
       TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
-      mat.getExplicitEstimate(fw1);
+      fwbw->mat.getExplicitEstimate(fw1);
       for(size_t pl = 0; pl < system.planes.size() -2; pl++){
 	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
 	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	mat.getExplicitEstimate(fw);
-	mat.getExplicitEstimate(bw);
+	fwbw->mat.getExplicitEstimate(fw);
+	fwbw->mat.getExplicitEstimate(bw);
       }
       Matrix<FITTERTYPE, 4, 4> cov;
       Matrix<FITTERTYPE, 4, 1> resids;
@@ -222,7 +249,7 @@ FITTERTYPE FwBw::operator() (){
 	resids = fw->params - bw->params;
 	cov = fw->cov + bw->cov;
 	double determinant = cov.determinant();
-
+	
 	fastInvert(cov);
 	double exponent = (resids.transpose() * cov * resids)(0,0);
 	logL -= log( determinant ) +  exponent;
@@ -251,28 +278,102 @@ FITTERTYPE FwBw::operator() (){
 	sqrPullYBW.at(pl) += pull2(1); 
       }
     }
+    FITTERTYPE return2 = 0.0;
+    for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
+      double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
+      return2 += resvar * resvar;
+      resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
+      return2 += resvar * resvar;
+      resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
+      return2 += resvar * resvar;
+      resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
+      return2 += resvar * resvar;
+    }
+    fwbw->results2[offset] = return2;
+    //Minimize, not maximize
+    fwbw->results[offset] = -1.0 * logL;
   }
-  if(isnan(logL)){
-    cout << "FWBW: nan" << endl;
-    mat.printParams( (char*) "params[\"RadiationLengths\"]", mat.radLengths, true);
-    mat.printParams( (char*) "params[\"ResolutionX\"]", mat.resX, true);
-    mat.printParams( (char*) "params[\"ResolutionY\"]", mat.resY, true);
-  }
-  retVal2 = 0.0;
-  for( int pl = 0; pl < system.planes.size() - 2; pl++){
-    double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
-    retVal2 += resvar * resvar;
-    resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
-    retVal2 += resvar * resvar;
-    resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
-    retVal2 += resvar * resvar;
-    resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
-    retVal2 += resvar * resvar;
-  }
-  //Minimize, not maximize
-  return(-1.0 * logL);
 }
-  
+
+void Minimizer::init(){
+  //Initialize 4 threads
+#ifndef DOTHREADS
+  cout << "Not using threads!" << endl;
+  nThreads = 1;
+#endif
+  systems.assign(nThreads, mat.system);
+  results.assign(nThreads,0.0f);
+}
+
+void Minimizer::prepareThreads(){
+  for(size_t ii = 0; ii < mat.system.planes.size(); ii++){
+    FitPlane<FITTERTYPE>& plO = mat.system.planes.at(ii); //Original plane
+    for(size_t thread = 0; thread < nThreads; thread++){
+      FitPlane<FITTERTYPE>& plT = systems.at(thread).planes.at(ii); //Thread plane
+      plT.setScatterThetaSqr( plO.getScatterThetaSqr());
+      plT.setSigmas( plO.getSigmaX(), plO.getSigmaY());
+    }
+  }
+}
+
+FITTERTYPE Minimizer::sumResults(){
+  double result = 0.0;
+  for(size_t ii = 0; ii < nThreads; ii++){
+    result += results.at(ii);
+  }
+  return(result);
+}
+
+FITTERTYPE Chi2::operator() (){
+  prepareThreads();
+  //vector<boost::thread> threads;
+#ifdef DOTHREAD
+  boost::thread_group threads;
+  for(int ii = 0; ii < nThreads; ii++){
+    threads.create_thread( boost::bind(minimize_workers::Chi2_worker, this, ii, nThreads));
+  }
+  threads.join_all();
+#else
+  minimize_workers::Chi2_worker(this, 0, 1);
+#endif
+  return( sumResults());
+}
+
+FITTERTYPE SDR::operator() (){
+  prepareThreads();
+  //vector<boost::thread> threads;
+#ifdef DOTHREAD
+  boost::thread_group threads;
+  for(int ii = 0; ii < nThreads; ii++){
+    threads.create_thread( boost::bind(minimize_workers::SDR_worker, this, ii, nThreads));
+  }
+  threads.join_all();
+#else
+  minimize_workers::SDR_worker(this, 0, 1);
+#endif
+  return( sumResults());
+}
+
+FITTERTYPE FwBw::operator() (){
+  prepareThreads();
+  //vector<boost::thread> threads;
+#ifdef DOTHREAD
+  boost::thread_group threads;
+  for(int ii = 0; ii < nThreads; ii++){
+    threads.create_thread( boost::bind(minimize_workers::FwBw_worker, this, ii, nThreads));
+  }
+  threads.join_all();
+#else
+  minimize_workers::FwBw_worker(this, 0, 1);
+#endif
+
+  retVal2 = 0.0;
+  for(size_t ii = 0; ii < nThreads; ii++){
+    retVal2 += results2[ii];
+  }
+  return( sumResults());
+}
+
 double normRand(){
   //A random number between 0 and 1
   return( (double) random() / (double) RAND_MAX);
@@ -537,7 +638,7 @@ gsl_vector* EstMat::systemToEst(){
   return(v);
 }
 
-void EstMat::estToSystem( const gsl_vector* params){
+void EstMat::estToSystem( const gsl_vector* params, TrackerSystem<FITTERTYPE,4>& system){
   //Set the system state from the gsl estimation vector
   double param = 0;
   vector<int>::iterator it;
@@ -649,7 +750,7 @@ double estimateSimplex(const gsl_vector* v, void * params){
   //A wrapper function for the simplex search
   Minimizer* minimize = (Minimizer*) params;
   EstMat& estMat = minimize->mat;
-  estMat.estToSystem(v);
+  estMat.estToSystem(v, minimize->mat.system);
   int zPrev = -999999999;
   for(size_t ii = 0; ii < estMat.system.planes.size(); ii++){
     if(zPrev > estMat.system.planes.at(ii).getZpos()){
@@ -661,8 +762,10 @@ double estimateSimplex(const gsl_vector* v, void * params){
   return((*minimize)());
 }
 
-void EstMat::simplexSearch(Minimizer* minimizeMe, int iterations, int restarts){
+void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restarts){
   //Do the simplex search on the configured Minimizer object
+  minimizeMe->init();
+  
   cout << "Initial guesses" << endl;
   printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
   bool resXYp = resXYIndex.size() or resXYMulti.size();
@@ -737,6 +840,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, int iterations, int restarts){
 }
 
 void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
+  minimizeMe->init();
   // Successive steps in Newtons method to find the minimum
   cout << "Initial guesses" << endl;
   printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
@@ -762,7 +866,7 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
       double step = val * .04 + 0.0001; //1 percent fails for floats
 
       //5 point stencil to get 1 and second detivative of param ii
-      estToSystem(vc);
+      estToSystem(vc, system);
       double p0h = (*minimizeMe)();
       fwbwval = p0h;
       mseval = minimizeMe->retVal2;
@@ -772,27 +876,27 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
       }
       
       gsl_vector_set(vc, ii, val + step);
-      estToSystem(vc);
+      estToSystem(vc, system);
       double p1h = (*minimizeMe)();
       if(doMse) { p1h = minimizeMe->retVal2; }
       
       gsl_vector_set(vc, ii, val + 2.0 * step);
-      estToSystem(vc);
+      estToSystem(vc, system);
       double p2h = (*minimizeMe)();
       if(doMse) { p2h = minimizeMe->retVal2; }
 
       gsl_vector_set(vc, ii, val - step);
-      estToSystem(vc);
+      estToSystem(vc, system);
       double m1h = (*minimizeMe)();
       if(doMse) { m1h = minimizeMe->retVal2; }
       
       gsl_vector_set(vc, ii, val - 2.0 * step);
-      estToSystem(vc);
+      estToSystem(vc, system);
       double m2h = (*minimizeMe)();
       if(doMse) { m2h = minimizeMe->retVal2; }
       
       gsl_vector_set(vc, ii, val);
-      estToSystem(vc);
+      estToSystem(vc, system);
 
       double firstDeriv = ( - 1.0 * p2h + 8.0 * p1h - 8.0 * m1h + 1.0 * m2h) / (12.0 * step);
       double secondDeriv = ( -1.0 * p2h + 16 * p1h - 30.0 * p0h + 16.0 * m1h - 1.0 * m2h)/( 12.0 * step * step );
@@ -803,7 +907,7 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
       if(isnan(newVal) or isinf(newVal)){
 	cout << "Nan step "<< endl;
 	gsl_vector_set(vc, ii, val );
-	estToSystem(vc);
+	estToSystem(vc, system);
       } else {
 	if(secondDeriv < 0 ){ 
 	  iteration = 0;
@@ -824,7 +928,7 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
 	  newVal *= 0.1;
 	}
 	gsl_vector_set(vc, ii, fabs(val - newVal) );
-	estToSystem(vc);
+	estToSystem(vc, system);
       }
     }
     

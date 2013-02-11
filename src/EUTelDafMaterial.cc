@@ -310,7 +310,7 @@ void EUTelDafMaterial::dafEnd() {
   // Minimizer* minimize = new FwBw(_matest); //FWBW
   // Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
   // Minimizer* minimize = new SDR(false,true,false,_matest); //SDR2
-  Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3
+  Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3, 
   _matest.simplexSearch(minimize, 500, 3);
 
   // FwBw* minimize = new FwBw(_matest); //FWBW

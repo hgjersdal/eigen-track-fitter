@@ -246,7 +246,6 @@ namespace daffitter{
     size_t m_nTracks, m_maxCandidates, m_minClusterSize;
  
     T m_dafChi2, m_ckfChi2, m_chi2OverNdof, m_sqrClusterRadius;
-
     T m_nXdz, m_nYdz;
     
     int addNeighbors(std::vector<PlaneHit<T> > &candidate, std::list<PlaneHit<T> > &hits);
@@ -264,16 +263,15 @@ namespace daffitter{
   public: 
     EigenFitter<T,N>* m_fitter;
     std::vector<daffitter::FitPlane<T> > planes;
-    std::vector<daffitter::TrackEstimate<T,N>*> mcTruth;
     std::vector<daffitter::TrackCandidate<T,N>*> tracks;
 
     TrackerSystem();
+    TrackerSystem(const TrackerSystem<T,N>& sys);
     void addPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatterVariance, bool excluded);
     void addMeasurement(size_t planeIndex, T x, T y, T z, bool goodRegion, size_t iden);
     void addMeasurement(Measurement<T>& meas);
     void init();
     void clear();
-    void setTruth(int plane, T x, T y, T xdz, T ydz);
     void setMaxCandidates(int nCandidates);
     size_t getNtracks() const { return(m_nTracks); };
     void weightToIndex(daffitter::TrackCandidate<T,N>* cnd);
@@ -299,6 +297,7 @@ namespace daffitter{
     void clusterTracker();
     void truthTracker();
     void combinatorialKF();
+    void index0tracker();
 
     //Fitters
     void fitPlanesInfoBiased(daffitter::TrackCandidate<T,N> *candidate);

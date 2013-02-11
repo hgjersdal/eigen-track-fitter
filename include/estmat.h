@@ -72,14 +72,15 @@ public:
   double minimizeMe();
 
   size_t getNSimplexParams();
-  void estToSystem( const gsl_vector* params);
+  void estToSystem( const gsl_vector* params, TrackerSystem<FITTERTYPE, 4>& system);
   gsl_vector* systemToEst();
   gsl_vector* simplesStepSize();
-  void simplexSearch(Minimizer* minimizeMe, int iterations, int restarts);
+  void simplexSearch(Minimizer* minimizeMe, size_t iterations, int restarts);
   void quasiNewtonHomeMade(FwBw* minimizeMe, int iterations);
   
   int itMax;
   void readTrack(int track);
+  void readTrack(int track, TrackerSystem<FITTERTYPE,4>& system);
   void clear(){ tracks.clear(); }
   void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim);
   void parameterIteration( double step, double Orig, double min, double max, int index, void (*stepFun) (EstMat& mat, int index, double step)  );
@@ -90,8 +91,15 @@ class Minimizer{
 public:
   EstMat& mat;
   FITTERTYPE retVal2;
-  Minimizer(EstMat& mat) : mat(mat) {;}
+  size_t nThreads;
+  vector <double> results;
+  vector<TrackerSystem<FITTERTYPE, 4> > systems;
+
+  Minimizer(EstMat& mat) : mat(mat), nThreads(4) {;}
   virtual FITTERTYPE operator() (void) = 0;
+  void init ();
+  void prepareThreads();
+  FITTERTYPE sumResults();
 };
 
 class Chi2: public Minimizer {
@@ -101,9 +109,8 @@ public:
 };
 
 class SDR: public Minimizer {
-private:
-  bool SDR1, SDR2, cholDec;
 public:
+  bool SDR1, SDR2, cholDec;
   SDR(bool SDR1, bool SDR2, bool cholDec,  EstMat& mat): Minimizer(mat), SDR1(SDR1), SDR2(SDR2), cholDec(cholDec) {;}
   virtual FITTERTYPE operator()(void);
 };
@@ -111,7 +118,8 @@ public:
 class FwBw: public Minimizer {
 public:
   FITTERTYPE retVal2;
-  FwBw(EstMat& mat): Minimizer(mat) {;}
+  vector <FITTERTYPE> results2;
+  FwBw(EstMat& mat): Minimizer(mat), results2(vector<FITTERTYPE>(4,0.0)) {;}
   virtual FITTERTYPE operator()(void);
 };
 
