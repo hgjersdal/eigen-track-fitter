@@ -20,7 +20,7 @@ The simulation experiments use root for plotting.
 
 	   make estmat
 	   ./estmat <option>
-where option is one of 'fwbw', 'sdr1', 'sdr2', 'sdr3', or 'hybr'
+where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr3`, or `hybr`
 
 This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads.
 
