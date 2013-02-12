@@ -80,9 +80,9 @@ void initialGuess(EstMat& mat){
 
 int main(int argc, char* argv[]){
   //Configure system, simulate tracks, and estimate material and resolution
-  double ebeam = 40.0;
+  double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
-  int nTracks = 40000;
+  int nTracks = 40000; //How many tracks to simulate per experiment
   int numberOfExperiments = 100; //How many simulation + estimation estimates should be preformed
 
   EstMat mat;
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]){
     radests.push_back(new TH1D(name, name,100, 0.02, 0.26));
   }
 
-  estimationParameters(mat);
+  estimationParameters(mat); //Configure which parameters to free in the fit
 
   //For each outeriter, a track sample will be simulated, and the system parameters will be estimated
   for(int outeriter = 0; outeriter < numberOfExperiments; outeriter ++){
@@ -174,10 +174,10 @@ int main(int argc, char* argv[]){
     cout << "Done estimating" << endl << endl << endl;
     
     //Plot pull distributions, residuals and chi squares
-    char* plotname = new char[200];
-    sprintf(plotname, "plots/iteration%i%s.root", (int)outeriter, argv[1]); 
-    mat.plot(plotname);
-    delete plotname;
+    // char* plotname = new char[200];
+    // sprintf(plotname, "plots/iteration%i%s.root", (int)outeriter, argv[1]); 
+    // mat.plot(plotname);
+    // delete plotname;
     
     //Fill histograms of estimates and plot
     for( int ii = 3; ii < 6; ii++) {

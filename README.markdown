@@ -1,3 +1,5 @@
+#eigen2-track-fitter
+
 A straight line track fitter for test beam analysis of pixel partickle detectors.
 
 The implementation contains a Combinatorial Kalman Filter for track finding, as well as implementation of the standard formulation of the Kalman Filter, an information matrix implementation of the Kalman Filter, and the Deterministic annealing filter. 
@@ -8,19 +10,22 @@ Also contains an implementation of the methods for estimating material and resol
 
 Code for using the fitter and material estimator from the EUTELESCOPE software framework is also included.
 
+##Dependencies
+
 The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen2. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading.
 
 The simulation experiments use root for plotting.
 
-Building and running the material estimator:
+##Building and running the material estimator
 
-make estmat
-./estmat <option>
-where option is one of fwbw sdr1 sdr2 sdr3 hybr
+	   make estmat
+	   ./estmat <option>
+where option is one of 'fwbw', 'sdr1', 'sdr2', 'sdr3', or 'hybr'
 
 This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads.
 
-Note that the material estimator does not work well for electrons. Electrons lose a substantial amount energy through Bremsstrahlung, a highly non Gaussian process. This means the beam energy after material has been traversed in non uniform, and not Gaussianly distributed. Since there is no way of estimating the particle energy from a straight line track, all beam particles must be assumed to have the same amount of scattering, and this is simply not a good approximation. A method that works somewhat, is to use the FWBW estimator on a track sample after a very tight cut on the chi2 (in the area of maybe n.d.o.f. times 2).
+## Caveats
+Note that the material estimator does not work well for electrons. Electrons lose a substantial amount energy through Bremsstrahlung, a highly non Gaussian process. This means the beam energy after material has been traversed in non uniform, and not Gaussianly distributed. Since there is no way of estimating the particle energy from a straight line track, all beam particles must be assumed to have the same amount of scattering, and this is simply not a good approximation. A method that works somewhat, is to use the FWBW estimator on a track sample after a very tight cut on the chi2 (in the area of maybe n.d.o.f. times 2 or 3).
 
 Another important thing to note is that the plane thickness is treated as uniform across an infinite detector plane. The geometry does not take into account that outside the sensor chip, there is another thickness or no material at all. This method should find the optimal scattering variance for tracks passing through ALL sensor chips, if the material across the active region is uniform. If a track passes outside the sensor chip, the amount of material is not correctly estimated. This should be fairly straight forward to improve with a more advanced geometry description. It might even work if the planes are non infinite in the fitter code, and one uses passive planes in GEAR.
 

@@ -431,9 +431,9 @@ void EstMat::simulate(int nTracks){
       sigmas(0) = resX.at(pl);
       sigmas(1) = resY.at(pl);
       if( pl == 3 or pl == 4 or pl == 5){
-	//double posX = x + (normRand() - 0.5) * 50;
-	//double posY = y + (normRand() - 0.5) * 400;
-	//simTrack.push_back( Measurement(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
+	// double posX = x + (normRand() - 0.5) * 50;
+	// double posY = y + (normRand() - 0.5) * 400;
+	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
       } else {
 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
