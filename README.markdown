@@ -20,7 +20,9 @@ The simulation experiments use root for plotting.
 
 	   make estmat
 	   ./estmat <option>
-where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr3`, or `hybr`
+where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr3`, `hybr` or `align`.
+
+The `align` option works diffrently from all the others in that is uses a simplex search to minimize chi2 by manipulating alignment parameters, not thicknesses and resolution. The alignment parameters should all be 0. The default settings uses more iterations and restarts, due to the fact that there are more parameters to be estimated.
 
 This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads.
 

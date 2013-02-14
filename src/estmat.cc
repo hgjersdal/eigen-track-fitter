@@ -3,11 +3,6 @@
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
 
-#if DOTHREAD
-#include <boost/thread.hpp>
-#include <boost/thread/detail/thread_group.hpp>
-#endif
-
 double getScatterSigma(double eBeam, double radLength){
   //Highland formula
   radLength = fabs(radLength);
@@ -18,25 +13,6 @@ double getScatterSigma(double eBeam, double radLength){
 void EstMat::addTrack( std::vector<Measurement<FITTERTYPE> > track){
   //Add a track to memory
   tracks.push_back(track);
-}
-
-void EstMat::readTrack(int track){
-  //Read a track into the tracker system into memory
-  for(size_t meas = 0; meas < tracks.at(track).size(); meas++){
-    Measurement<FITTERTYPE>& m1 = tracks.at(track).at(meas);
-    for(size_t ii = 0; ii < system.planes.size(); ii++){
-      if( (int) m1.getIden() == (int) system.planes.at(ii).getSensorID()){
-	double x = m1.getX() * ( 1.0 + xScale.at(ii)) + m1.getY() * zRot.at(ii);
-	double y = m1.getY() * ( 1.0 + yScale.at(ii)) - m1.getX() * zRot.at(ii);
-	x += xShift.at(ii);
-	y += yShift.at(ii); 
-	
-	double z = m1.getZ();
-	system.addMeasurement(ii, x, y, z, true, m1.getIden());
-	break;
-      }
-    }
-  }
 }
 
 void EstMat::readTrack(int track, TrackerSystem<FITTERTYPE, 4>& system){
@@ -74,224 +50,236 @@ void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   // estim->params(3) = estim->cov(3,3) * dy+ estim->cov(3,1) * y;
 } 
 
-namespace minimize_workers{
-  void Chi2_worker(Chi2* chi2, size_t offset, size_t stride){
-    //Get the global chi2 of the track sample
-    TrackerSystem<FITTERTYPE,4>& system = chi2->systems.at(offset);
-
-    //Track candidate is the same for all tracks
-    system.index0tracker();
-
-    double varchi2(0.0);
-    for(int track = offset; track < chi2->mat.itMax; track+= stride){
-      system.clear();
-      chi2->mat.readTrack(track, system);
+FITTERTYPE Chi2::operator() (size_t offset, size_t stride){
+  //Get the global chi2 of the track sample
+  TrackerSystem<FITTERTYPE,4>& system = systems.at(offset);
+  
+  //Track candidate is the same for all tracks
+  system.index0tracker();
+  
+  double varchi2(0.0);
+  for(int track = offset; track < mat.itMax; track+= stride){
+    system.clear();
+    mat.readTrack(track, system);
       size_t ii = 0;
       system.fitInfoFWBiased(system.tracks.at(ii));
       system.getChi2BiasedInfo(system.tracks.at(ii));
       varchi2 += system.tracks.at(ii)->chi2;
-    }
-    chi2->results[offset] = varchi2;
   }
   
-  void SDR_worker(SDR* sdr, size_t offset, size_t stride){
-    TrackerSystem<FITTERTYPE,4>& system = sdr->systems.at(offset);
-    std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
-    std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) );
-    int nTracks = 0;
-    
-    //Track candidate is the same for all tracks
-    system.index0tracker();
-
-    for(int track = offset; track < sdr->mat.itMax; track += stride){
-      //prepare system for new track: clear system from prev go around, read track from memory, run track finder
-      system.clear();
-      sdr->mat.readTrack(track, system);
-      
-      //Only one track! Skip track finder
-      //system.clusterTracker();
-      //for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
-      size_t ii = 0;
-      //Transkate DAF track candidate to KF candidate
-      //system.weightToIndex(system.tracks.at(ii));
-      //Run FW fitter, get p-values
-      system.fitInfoFWBiased(system.tracks.at(ii));
-      system.fitInfoBWUnBiased(system.tracks.at(ii));
-      //Get explicit estimates
-      TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
-      sdr->mat.getExplicitEstimate(fw1);
-      
-      for(size_t pl = 0; pl < system.planes.size() -2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
-	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	sdr->mat.getExplicitEstimate(fw);
-	sdr->mat.getExplicitEstimate(bw);
-      }
-      //Chi2 increments FW
-      for(size_t pl = 2; pl < system.planes.size(); pl++){
-	//I'm using an information filter, need explicit state and covariance
-	TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
-	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	//Get residuals in x and y, squared
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
-	//Get variance of residuals in x and y
-	Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-	Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
-	sqrPullXFW.at(pl - 2) += pull2(0); 
-	sqrPullYFW.at(pl - 2) += pull2(1); 
-      }
-      //Chi2 increments BW
-      for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
-	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
-	Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-	Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
-	sqrPullXBW.at(pl) += pull2(0);
-	sqrPullYBW.at(pl) += pull2(1);
-      }
-      //Difference in parameters
-      if(not sdr->cholDec){
-	for(size_t pl = 1; pl < system.planes.size() -2; pl++){
-	  TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
-	  TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	  for(size_t param = 0; param < 4; param++){
-	    double var = fw->cov(param,param) + bw->cov(param,param);
-	    double res = fw->params(param) - bw->params(param);
-	    sqrParams.at(pl -1).at(param) += res * res / var;
-	  }
-	}
-      } else {
-	//Attempt at getting pull values from cholesky decomposed covariance.
-	for(size_t pl = 1; pl < system.planes.size() -2; pl++){
-	  TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
-	  TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	  Matrix<double, 4, 1> tmpDiff =  (fw->params - bw->params).cast<double>();
-	  Matrix<FITTERTYPE, 4, 4> tmpCov =  fw->cov + bw->cov;
-	  
-	  //Use doubles, else it fails
-	  Eigen::LLT<Matrix4d> tmpChol;
-	  tmpChol.compute(tmpCov.cast<double>());
-	  tmpChol.matrixL().marked<Eigen::LowerTriangular>().solveTriangularInPlace(tmpDiff);
-	  for(size_t param = 0; param < 4; param++){
-	    sqrParams.at(pl -1).at(param) += tmpDiff(param) * tmpDiff(param);
-	  }
-	}
-      }
-      nTracks++;
-    }
-    
-    double varvar(0.0);
-    if(sdr->SDR2){
-      for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
-	double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
-	varvar += resvar * resvar;
-	resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
-	varvar += resvar * resvar;
-	resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
-	varvar += resvar * resvar;
-	resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
-	varvar += resvar * resvar;
-      }
-    }
-    if(sdr->SDR1){
-      for( size_t pl = 1; pl < system.planes.size() - 2; pl++){
-	for(int param = 0; param < 4; param++){
-	  double resvar = 1.0 - (sqrParams.at(pl - 1).at(param) / (nTracks - 1));
-	  varvar += resvar * resvar;
-	}
-      }
-    }
-    sdr->results.at(offset) = varvar;
+  {
+#if DOTHREAD
+    boost::mutex::scoped_lock lock(resultGurad);
+#endif
+    result += varchi2;
   }
-
-  void FwBw_worker(FwBw* fwbw, size_t offset, size_t stride){
-    TrackerSystem<FITTERTYPE,4>& system = fwbw->systems.at(offset);
+}
+  
+FITTERTYPE SDR::operator() (size_t offset, size_t stride){
+  //Get the mean^2 + (1 - variance) of the standardized residuals of chi2 increments and or pull distributions
+  TrackerSystem<FITTERTYPE,4>& system = systems.at(offset);
+  std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
+  std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) );
+  int nTracks = 0;
     
-    //Track candidate is the same for all tracks
-    system.index0tracker();
+  //Track candidate is the same for all tracks
+  system.index0tracker();
+  
+  for(int track = offset; track < mat.itMax; track += stride){
+    //prepare system for new track: clear system from prev go around, read track from memory, run track finder
+    system.clear();
+    mat.readTrack(track, system);
     
-    double logL(0.0);
-    std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
-    std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
-    std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) ); 
-    int nTracks = 0;
-
-    for(int track = offset; track < fwbw->mat.itMax; track += stride){
-      //prepare system for new track: clear system from prev go around, read track from memory, run track finder
-      system.clear();
-      fwbw->mat.readTrack(track,system);
-      size_t ii = 0;
-      nTracks++;
-      //Translate candidate from DAF to KF
-      system.fitInfoFWBiased(system.tracks.at(ii));
-      system.fitInfoBWUnBiased(system.tracks.at(ii));
-      //Get explicit estimates
-      TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
-      fwbw->mat.getExplicitEstimate(fw1);
-      for(size_t pl = 0; pl < system.planes.size() -2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
-	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	fwbw->mat.getExplicitEstimate(fw);
-	fwbw->mat.getExplicitEstimate(bw);
-      }
-      Matrix<FITTERTYPE, 4, 4> cov;
-      Matrix<FITTERTYPE, 4, 1> resids;
-      //Difference in parameters
+      //Only one track! Skip track finder
+    size_t ii = 0;
+    //Run FW fitter, get p-values
+    system.fitInfoFWBiased(system.tracks.at(ii));
+    system.fitInfoBWUnBiased(system.tracks.at(ii));
+    //Get explicit estimates
+    TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
+    mat.getExplicitEstimate(fw1);
+    
+    for(size_t pl = 0; pl < system.planes.size() -2; pl++){
+      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
+      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+      mat.getExplicitEstimate(fw);
+      mat.getExplicitEstimate(bw);
+    }
+    //Chi2 increments FW
+    for(size_t pl = 2; pl < system.planes.size(); pl++){
+      //I'm using an information filter, need explicit state and covariance
+      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
+      Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
+      //Get residuals in x and y, squared
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      //Get variance of residuals in x and y
+      Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      sqrPullXFW.at(pl - 2) += pull2(0); 
+      sqrPullYFW.at(pl - 2) += pull2(1); 
+    }
+    //Chi2 increments BW
+    for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
+      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
+      Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      sqrPullXBW.at(pl) += pull2(0);
+      sqrPullYBW.at(pl) += pull2(1);
+    }
+    //Difference in parameters
+    if(not cholDec){
       for(size_t pl = 1; pl < system.planes.size() -2; pl++){
 	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
 	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	resids = fw->params - bw->params;
-	cov = fw->cov + bw->cov;
-	double determinant = cov.determinant();
+	for(size_t param = 0; param < 4; param++){
+	  double var = fw->cov(param,param) + bw->cov(param,param);
+	  double res = fw->params(param) - bw->params(param);
+	  sqrParams.at(pl -1).at(param) += res * res / var;
+	}
+      }
+    } else {
+      //Attempt at getting pull values from cholesky decomposed covariance.
+      for(size_t pl = 1; pl < system.planes.size() -2; pl++){
+	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
+	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+	Matrix<double, 4, 1> tmpDiff =  (fw->params - bw->params).cast<double>();
+	Matrix<FITTERTYPE, 4, 4> tmpCov =  fw->cov + bw->cov;
 	
-	fastInvert(cov);
-	double exponent = (resids.transpose() * cov * resids)(0,0);
-	logL -= log( determinant ) +  exponent;
-      }
-      //Chi2 increments FW
-      for(size_t pl = 2; pl < system.planes.size(); pl++){
-	//I'm using an information filter, need explicit state and covariance
-	TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
-	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	//Get residuals in x and y, squared
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
-	//Get variance of residuals in x and y
-	Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-	Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
-	sqrPullXFW.at(pl - 2) += pull2(0); 
-	sqrPullYFW.at(pl - 2) += pull2(1); 
-      }
-      //Chi2 increments BW
-      for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
-	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
-	Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-	Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
-	sqrPullXBW.at(pl) += pull2(0); 
-	sqrPullYBW.at(pl) += pull2(1); 
+	//Use doubles, else it fails
+	Eigen::LLT<Matrix4d> tmpChol;
+	tmpChol.compute(tmpCov.cast<double>());
+	tmpChol.matrixL().marked<Eigen::LowerTriangular>().solveTriangularInPlace(tmpDiff);
+	for(size_t param = 0; param < 4; param++){
+	  sqrParams.at(pl -1).at(param) += tmpDiff(param) * tmpDiff(param);
+	}
       }
     }
-    FITTERTYPE return2 = 0.0;
+    nTracks++;
+  }
+  
+  double varvar(0.0);
+  if(SDR2){
     for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
       double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
-      return2 += resvar * resvar;
+      varvar += resvar * resvar;
       resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
-      return2 += resvar * resvar;
+      varvar += resvar * resvar;
       resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
-      return2 += resvar * resvar;
+      varvar += resvar * resvar;
       resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
-      return2 += resvar * resvar;
+      varvar += resvar * resvar;
     }
-    fwbw->results2[offset] = return2;
-    //Minimize, not maximize
-    fwbw->results[offset] = -1.0 * logL;
+  }
+  if(SDR1){
+    for( size_t pl = 1; pl < system.planes.size() - 2; pl++){
+      for(int param = 0; param < 4; param++){
+	double resvar = 1.0 - (sqrParams.at(pl - 1).at(param) / (nTracks - 1));
+	varvar += resvar * resvar;
+      }
+    }
+  }
+  {
+#if DOTHREAD
+    boost::mutex::scoped_lock lock(resultGurad);
+#endif
+    result += varvar;
+  }
+}
+
+FITTERTYPE FwBw::operator() (size_t offset, size_t stride){
+  //Get the negative log likelihood of the state difference of a forward and
+  //backward running Kalman filter.
+  TrackerSystem<FITTERTYPE,4>& system = systems.at(offset);
+  
+  //Track candidate is the same for all tracks
+  system.index0tracker();
+  
+  double logL(0.0);
+  std::vector< double > sqrPullXFW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullXBW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullYFW(system.planes.size() - 2, 0.0 );
+  std::vector< double > sqrPullYBW(system.planes.size() - 2, 0.0 );
+  std::vector< std::vector<double> > sqrParams(system.planes.size() - 3, std::vector<double>(4 ,0.0) ); 
+  int nTracks = 0;
+    
+  for(int track = offset; track < mat.itMax; track += stride){
+    //prepare system for new track: clear system from prev go around, read track from memory, run track finder
+    system.clear();
+    mat.readTrack(track,system);
+    size_t ii = 0;
+    nTracks++;
+    //Translate candidate from DAF to KF
+    system.fitInfoFWBiased(system.tracks.at(ii));
+    system.fitInfoBWUnBiased(system.tracks.at(ii));
+    //Get explicit estimates
+    TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
+    mat.getExplicitEstimate(fw1);
+    for(size_t pl = 0; pl < system.planes.size() -2; pl++){
+      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
+      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+      mat.getExplicitEstimate(fw);
+      mat.getExplicitEstimate(bw);
+    }
+    Matrix<FITTERTYPE, 4, 4> cov;
+    Matrix<FITTERTYPE, 4, 1> resids;
+    //Difference in parameters
+    for(size_t pl = 1; pl < system.planes.size() -2; pl++){
+      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+      resids = fw->params - bw->params;
+      cov = fw->cov + bw->cov;
+      double determinant = cov.determinant();
+	
+      fastInvert(cov);
+      double exponent = (resids.transpose() * cov * resids)(0,0);
+      logL -= log( determinant ) +  exponent;
+    }
+    //Chi2 increments FW
+    for(size_t pl = 2; pl < system.planes.size(); pl++){
+      //I'm using an information filter, need explicit state and covariance
+      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
+      Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
+      //Get residuals in x and y, squared
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      //Get variance of residuals in x and y
+      Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      sqrPullXFW.at(pl - 2) += pull2(0); 
+      sqrPullYFW.at(pl - 2) += pull2(1); 
+    }
+    //Chi2 increments BW
+    for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
+      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
+      Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      sqrPullXBW.at(pl) += pull2(0); 
+      sqrPullYBW.at(pl) += pull2(1); 
+    }
+  }
+  FITTERTYPE return2 = 0.0;
+  for( size_t pl = 0; pl < system.planes.size() - 2; pl++){
+    double resvar = 1.0 - sqrPullXFW.at(pl)/(nTracks - 1);
+    return2 += resvar * resvar;
+    resvar = 1.0 - sqrPullYFW.at(pl)/(nTracks - 1);
+    return2 += resvar * resvar;
+    resvar = 1.0 - sqrPullXBW.at(pl)/(nTracks - 1);
+    return2 += resvar * resvar;
+    resvar = 1.0 - sqrPullYBW.at(pl)/(nTracks - 1);
+    return2 += resvar * resvar;
+  }
+  {
+#if DOTHREAD
+    boost::mutex::scoped_lock lock(resultGurad);
+#endif
+    result += -1.0 * logL;
+    retVal2 += return2;
   }
 }
 
@@ -302,10 +290,10 @@ void Minimizer::init(){
   nThreads = 1;
 #endif
   systems.assign(nThreads, mat.system);
-  results.assign(nThreads,0.0f);
 }
 
 void Minimizer::prepareThreads(){
+  //Copy thicknesses and resolutions, reset resturn values
   for(size_t ii = 0; ii < mat.system.planes.size(); ii++){
     FitPlane<FITTERTYPE>& plO = mat.system.planes.at(ii); //Original plane
     for(size_t thread = 0; thread < nThreads; thread++){
@@ -314,64 +302,23 @@ void Minimizer::prepareThreads(){
       plT.setSigmas( plO.getSigmaX(), plO.getSigmaY());
     }
   }
+  result = 0;
+  retVal2 = 0.0f;
 }
 
-FITTERTYPE Minimizer::sumResults(){
-  double result = 0.0;
-  for(size_t ii = 0; ii < nThreads; ii++){
-    result += results.at(ii);
-  }
-  return(result);
-}
-
-FITTERTYPE Chi2::operator() (){
+FITTERTYPE Minimizer::operator() (void){
+  //Start threads if DOTHREAD, run job in main thread if not.
   prepareThreads();
-  //vector<boost::thread> threads;
 #ifdef DOTHREAD
   boost::thread_group threads;
   for(int ii = 0; ii < nThreads; ii++){
-    threads.create_thread( boost::bind(minimize_workers::Chi2_worker, this, ii, nThreads));
+    threads.create_thread( boost::bind(&Minimizer::operator(), this, ii, nThreads));
   }
   threads.join_all();
 #else
-  minimize_workers::Chi2_worker(this, 0, 1);
+  (*this)(0, 1);
 #endif
-  return( sumResults());
-}
-
-FITTERTYPE SDR::operator() (){
-  prepareThreads();
-  //vector<boost::thread> threads;
-#ifdef DOTHREAD
-  boost::thread_group threads;
-  for(int ii = 0; ii < nThreads; ii++){
-    threads.create_thread( boost::bind(minimize_workers::SDR_worker, this, ii, nThreads));
-  }
-  threads.join_all();
-#else
-  minimize_workers::SDR_worker(this, 0, 1);
-#endif
-  return( sumResults());
-}
-
-FITTERTYPE FwBw::operator() (){
-  prepareThreads();
-  //vector<boost::thread> threads;
-#ifdef DOTHREAD
-  boost::thread_group threads;
-  for(int ii = 0; ii < nThreads; ii++){
-    threads.create_thread( boost::bind(minimize_workers::FwBw_worker, this, ii, nThreads));
-  }
-  threads.join_all();
-#else
-  minimize_workers::FwBw_worker(this, 0, 1);
-#endif
-
-  retVal2 = 0.0;
-  for(size_t ii = 0; ii < nThreads; ii++){
-    retVal2 += results2[ii];
-  }
-  return( sumResults());
+  return( result );
 }
 
 double normRand(){
@@ -396,9 +343,9 @@ void gaussRand(double& x1, double& x2){
 void EstMat::simulate(int nTracks){
   // Toy simulation of a straight track with Gaussian uncertainties and scattering
   cout << "Simulation parameters" << endl;
-  printParams( (char*) "params[\"RadiationLengths\"]", radLengths, true);
-  printParams( (char*) "params[\"ResolutionX\"]", resX, true);
-  printParams( (char*) "params[\"ResolutionY\"]", resY, true);
+  printParams( (char*) "params[\"RadiationLengths\"]", radLengths, true, "%4.6f ");
+  printParams( (char*) "params[\"ResolutionX\"]", resX, true, "%4.6f ");
+  printParams( (char*) "params[\"ResolutionY\"]", resY, true, "%4.6f ");
 
   size_t nPlanes = system.planes.size();
   
@@ -410,12 +357,12 @@ void EstMat::simulate(int nTracks){
     }
     double x(0.0f), y(0.0f), dx(0.0f), dy(0.0f);
     gaussRand(x, y);
-    x *= 10000.0;
-    y *= 10000.0;
+    x *= 10000.0f;
+    y *= 10000.0f;
     double g1, g2;
     gaussRand(g1, g2);
-    dx += g1 * 0.0001;
-    dy += g2 * 0.0001;
+    dx += g1 * 0.0001f;
+    dy += g2 * 0.0001f;
     
     double zPos = 0;
     for(size_t pl = 0; pl < nPlanes; pl++){
@@ -441,11 +388,6 @@ void EstMat::simulate(int nTracks){
     }
     addTrack(simTrack);
   }
-}
-
-void EstMat::addPlane(FitPlane<FITTERTYPE>& pl){
-  //Add a plane to the material estimator
-  system.planes.push_back( FitPlane<FITTERTYPE>(pl) );
 }
 
 void EstMat::initSim(int nPlanes){
@@ -485,12 +427,25 @@ void EstMat::setPlane(int index, double sigmaX, double sigmaY, double radLength)
   system.planes.at(index).setSigmas(sigmaX, sigmaY);
 }
 
-void EstMat::printParams(char* name, std::vector<FITTERTYPE>& params, bool plot){
+void EstMat::printAllFreeParams(){
+  bool resXYp = resXYIndex.size() or resXYMulti.size();
+  printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size(), "%4.6f " );
+  printParams( (char*) "params[\"ResolutionX\"]", resX, resXIndex.size() or resXMulti.size() or resXYp, "%4.6f ");
+  printParams( (char*) "params[\"ResolutionY\"]", resY, resYIndex.size() or resYMulti.size() or resXYp, "%4.6f ");
+  printParams( (char*) "params[\"XShift\"]", xShift, xShiftIndex.size(), "%4.2f ");
+  printParams( (char*) "params[\"YShift\"]", yShift, yShiftIndex.size(), "%4.2f ");
+  printParams( (char*) "params[\"XScale\"]", xScale, xScaleIndex.size(), "%4.3f ");
+  printParams( (char*) "params[\"YScale\"]", yScale, yScaleIndex.size(), "%4.3f ");
+  printParams( (char*) "params[\"ZRot\"]", zRot, zRotIndex.size(), "%4.3f ");
+  printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size(), "%4.2f ");
+}
+
+void EstMat::printParams(char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString){
   //Print estimation parameters to screen
   if(not plot){ return;}
   std::cout << name << " = \" ";
   for( size_t pos = 0; pos < params.size(); pos++){
-    printf( " %4.6f", params.at(pos));
+    printf( valString, params.at(pos));
   }
   std::cout << " \"" << std::endl;
 }
@@ -527,7 +482,7 @@ void EstMat::plot(char* fname){
   //Loop over all tracks
   for(size_t track = 0; track < tracks.size(); track++){
     system.clear();
-    readTrack(track);
+    readTrack(track, system);
     system.clusterTracker();
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
       TrackCandidate<FITTERTYPE, 4>* candidate = system.tracks.at(ii);
@@ -591,50 +546,37 @@ size_t EstMat::getNSimplexParams(){
   return( params );
 }
 
+void EstMat::vectToEst(gsl_vector* v, std::vector<int>& indexVector, vector<FITTERTYPE>& dataVector, size_t& param){
+  for(size_t ii = 0; ii<indexVector.size();ii++){
+    gsl_vector_set(v, param++, dataVector.at( indexVector.at(ii)));
+  }
+}
+void EstMat::multiVectToEst(gsl_vector* v, std::vector<int>& indexVector, vector<FITTERTYPE>& dataVector, size_t& param){
+  if(indexVector.size() > 0){
+    gsl_vector_set(v,param++, dataVector.at(0));
+  }
+}
+
 gsl_vector* EstMat::systemToEst(){
   //Read the state of the tracker system into a gsl vector for the simplex search
   int nParams = getNSimplexParams();
   gsl_vector* v = gsl_vector_alloc(nParams);
-
-  double param = 0;
-  for(size_t ii = 0; ii < resXIndex.size(); ii ++){
-    gsl_vector_set(v, param++, resX.at( resXIndex.at(ii)) );
-  }
-  for(size_t ii = 0; ii < resYIndex.size(); ii ++){
-    gsl_vector_set(v, param++, resY.at( resYIndex.at(ii)) );
-  }
-  for(size_t ii = 0; ii < radLengthsIndex.size(); ii ++){
-    gsl_vector_set(v, param++, radLengths.at( radLengthsIndex.at(ii)) );
-  }
-  if( resXMulti.size() > 0){
-    gsl_vector_set(v, param++, resX.at( resXMulti.at(0)) );
-  }
-  if( resYMulti.size() > 0){
-    gsl_vector_set(v, param++, resY.at( resYMulti.at(0)) );
-  }
-  if( resXYMulti.size() > 0){
-    gsl_vector_set(v, param++, resX.at( resXYMulti.at(0)) );
-  }
+  size_t param = 0;
+  //Material and resolutions
+  vectToEst(v, resXIndex, resX, param);
+  vectToEst(v, resYIndex, resY, param);
+  vectToEst(v, radLengthsIndex, radLengths, param);
+  multiVectToEst(v, resXMulti, resX, param);
+  multiVectToEst(v, resYMulti, resY, param);
+  multiVectToEst(v, resXYMulti, resX, param);
 
   //Alignment
-  for(size_t ii = 0; ii < xShiftIndex.size(); ii++){
-    gsl_vector_set(v, param++, xShift.at( xShiftIndex.at(ii)));
-  }
-  for(size_t ii = 0; ii < yShiftIndex.size(); ii++){
-    gsl_vector_set(v, param++, yShift.at( yShiftIndex.at(ii)));
-  }
-  for(size_t ii = 0; ii < xScaleIndex.size(); ii++){
-    gsl_vector_set(v, param++, xScale.at( xScaleIndex.at(ii)));
-  }
-  for(size_t ii = 0; ii < yScaleIndex.size(); ii++){
-    gsl_vector_set(v, param++, yScale.at( yScaleIndex.at(ii)));
-  }
-  for(size_t ii = 0; ii < zRotIndex.size(); ii++){
-    gsl_vector_set(v, param++, zRot.at( zRotIndex.at(ii)));
-  }
-  for(size_t ii = 0; ii < zPosIndex.size(); ii++){
-    gsl_vector_set(v, param++, zPos.at( zPosIndex.at(ii)));
-  }
+  vectToEst(v, xShiftIndex, xShift, param);
+  vectToEst(v, yShiftIndex, yShift, param);
+  vectToEst(v, xScaleIndex, xScale, param);
+  vectToEst(v, yScaleIndex, yScale, param);
+  vectToEst(v, zRotIndex, zRot, param);
+  vectToEst(v, zPosIndex, zPos, param);
   return(v);
 }
 
@@ -747,7 +689,7 @@ gsl_vector* EstMat::simplesStepSize(){
 }
 
 double estimateSimplex(const gsl_vector* v, void * params){
-  //A wrapper function for the simplex search
+  //A wrapper function for the simplex search for passing to the C library GSL
   Minimizer* minimize = (Minimizer*) params;
   EstMat& estMat = minimize->mat;
   estMat.estToSystem(v, minimize->mat.system);
@@ -767,15 +709,12 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
   minimizeMe->init();
   
   cout << "Initial guesses" << endl;
-  printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
-  bool resXYp = resXYIndex.size() or resXYMulti.size();
-  printParams( (char*) "params[\"ResolutionX\"]", resX, resXIndex.size() or resXMulti.size() or resXYp);
-  printParams( (char*) "params[\"ResolutionY\"]", resY, resYIndex.size() or resYMulti.size() or resXYp);
-  printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
+  printAllFreeParams();
   
   itMax = tracks.size();
   
   for(int ii = 0; ii < restarts; ii++){
+    if (ii > 0) { cout << "STARTING RESTART " << ii << endl;}
     const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
     gsl_multimin_fminimizer *s = NULL;
     gsl_vector *ss, *x;
@@ -820,15 +759,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
 		gsl_vector_get (s->x, 0), 
 		gsl_vector_get (s->x, 1), 
 		s->fval, size);
-	printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
-	printParams( (char*) "params[\"ResolutionX\"]", resX, resXIndex.size() or resXMulti.size() or resXYp);
-	printParams( (char*) "params[\"ResolutionY\"]", resY, resYIndex.size() or resYMulti.size() or resXYp);
-	printParams( (char*) "params[\"XShift\"]", xShift, xShiftIndex.size());
-	printParams( (char*) "params[\"YShift\"]", yShift, yShiftIndex.size());
-	printParams( (char*) "params[\"XScale\"]", xScale, xScaleIndex.size());
-	printParams( (char*) "params[\"YScale\"]", yScale, yScaleIndex.size());
-	printParams( (char*) "params[\"ZRot\"]", zRot, zRotIndex.size());
-	printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
+	printAllFreeParams();
       }
     }
     while (status == GSL_CONTINUE && iter < iterations);
@@ -839,15 +770,23 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
   }
 }
 
-void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
+FITTERTYPE EstMat::stepVector(gsl_vector* vc, size_t index, FITTERTYPE value, bool doMSE, Minimizer* minimize){
+  //Obtain value for derivation step
+  gsl_vector_set(vc, index, value);
+  estToSystem(vc, system);
+  double retVal = (*minimize)();
+  if(doMSE){
+    retVal = minimize->retVal2;
+  }
+  return(retVal);
+}
+
+void EstMat::quasiNewtonHomeMade(Minimizer* minimizeMe, int iterations){
+  //Try to find minimum using independent steps of variables using Newtons method
   minimizeMe->init();
   // Successive steps in Newtons method to find the minimum
   cout << "Initial guesses" << endl;
-  printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
-  bool resXYp = resXYIndex.size() or resXYMulti.size();
-  printParams( (char*) "params[\"ResolutionX\"]", resX, resXIndex.size() or resXMulti.size() or resXYp);
-  printParams( (char*) "params[\"ResolutionY\"]", resY, resYIndex.size() or resYMulti.size() or resXYp);
-  printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
+  printAllFreeParams();
 
   size_t nParams = getNSimplexParams();
   gsl_vector* vc = systemToEst();
@@ -860,60 +799,36 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
   for(int iteration  = 0; iteration < iterations; iteration++){
     cout << "it " << iteration << endl;
     for(size_t ii = 0; ii < nParams; ii++){
-      bool doMse = (ii < resSize);// and (iteration > 5); 
+      bool doMse = (ii < resSize) and minimizeMe->twoRetVals();
 
       double val = gsl_vector_get(vc, ii);
       double step = val * .04 + 0.0001; //1 percent fails for floats
 
-      //5 point stencil to get 1 and second detivative of param ii
-      estToSystem(vc, system);
-      double p0h = (*minimizeMe)();
-      fwbwval = p0h;
+      //Get five points along index i
+      double p0h =  stepVector(vc, ii, val + 0.0 * step, doMse, minimizeMe);
+      fwbwval = minimizeMe->result;
       mseval = minimizeMe->retVal2;
+      double p1h =  stepVector(vc, ii, val + 1.0 * step, doMse, minimizeMe);
+      double p2h =  stepVector(vc, ii, val + 2.0 * step, doMse, minimizeMe);
+      double m1h =  stepVector(vc, ii, val - 1.0 * step, doMse, minimizeMe);
+      double m2h =  stepVector(vc, ii, val - 2.0 * step, doMse, minimizeMe);
 
-      if(doMse) { 
-	p0h = minimizeMe->retVal2; 
-      }
-      
-      gsl_vector_set(vc, ii, val + step);
-      estToSystem(vc, system);
-      double p1h = (*minimizeMe)();
-      if(doMse) { p1h = minimizeMe->retVal2; }
-      
-      gsl_vector_set(vc, ii, val + 2.0 * step);
-      estToSystem(vc, system);
-      double p2h = (*minimizeMe)();
-      if(doMse) { p2h = minimizeMe->retVal2; }
-
-      gsl_vector_set(vc, ii, val - step);
-      estToSystem(vc, system);
-      double m1h = (*minimizeMe)();
-      if(doMse) { m1h = minimizeMe->retVal2; }
-      
-      gsl_vector_set(vc, ii, val - 2.0 * step);
-      estToSystem(vc, system);
-      double m2h = (*minimizeMe)();
-      if(doMse) { m2h = minimizeMe->retVal2; }
-      
+      //Go back to initial value
       gsl_vector_set(vc, ii, val);
       estToSystem(vc, system);
 
       double firstDeriv = ( - 1.0 * p2h + 8.0 * p1h - 8.0 * m1h + 1.0 * m2h) / (12.0 * step);
       double secondDeriv = ( -1.0 * p2h + 16 * p1h - 30.0 * p0h + 16.0 * m1h - 1.0 * m2h)/( 12.0 * step * step );
       double newVal = firstDeriv / secondDeriv;
-      //cout << firstDeriv << " , " << secondDeriv << " , " << val << " , " << newVal << endl;
       
-      //Did we eben get a number?
+      //Check the new value for NaNs, steps in wrong direction or large steps
       if(isnan(newVal) or isinf(newVal)){
 	cout << "Nan step "<< endl;
-	gsl_vector_set(vc, ii, val );
-	estToSystem(vc, system);
       } else {
 	if(secondDeriv < 0 ){ 
 	  iteration = 0;
 	  cout << "Maximizing, " << val << " , " << val - newVal << endl;
-	  if( fabs(newVal) > fabs( val ) * 0.1 ){//Daming
-	    //newVal = 0.25 * val;
+	  if( fabs(newVal) > fabs( val ) * 0.1 ){
 	    newVal = 0.15 * val;
 	    if(firstDeriv < 0){
 	      newVal *= -1.0;
@@ -922,7 +837,6 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
 	    newVal *= -1.0;
 	  }
 	}
-	
 	while(fabs(newVal) > 5 * fabs(val) + 0.00001){
 	  cout << "Large step, damping: " << val << " , " << val - newVal << endl;
 	  newVal *= 0.1;
@@ -931,17 +845,8 @@ void EstMat::quasiNewtonHomeMade(FwBw* minimizeMe, int iterations){
 	estToSystem(vc, system);
       }
     }
-    
     printf ("fwbw() = %10.5f mse() = %10.5f\n", fwbwval, mseval);
-    printParams( (char*) "params[\"RadiationLengths\"]", radLengths, radLengthsIndex.size() or radLengthsMulti.size() );
-    printParams( (char*) "params[\"ResolutionX\"]", resX, resXIndex.size() or resXMulti.size() or resXYp);
-    printParams( (char*) "params[\"ResolutionY\"]", resY, resYIndex.size() or resYMulti.size() or resXYp);
-    printParams( (char*) "params[\"XShift\"]", xShift, xShiftIndex.size());
-    printParams( (char*) "params[\"YShift\"]", yShift, yShiftIndex.size());
-    printParams( (char*) "params[\"XScale\"]", xScale, xScaleIndex.size());
-    printParams( (char*) "params[\"YScale\"]", yScale, yScaleIndex.size());
-    printParams( (char*) "params[\"ZRot\"]", zRot, zRotIndex.size());
-    printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size());
+    printAllFreeParams();
   }
   gsl_vector_free(vc);
 }

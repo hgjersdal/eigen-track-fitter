@@ -17,8 +17,14 @@
 
 #include "EUTelDafTrackerSystem.h"
 
-
 #include <gsl/gsl_vector_double.h>
+
+#if DOTHREAD
+#include <boost/thread.hpp>
+#include <boost/thread/detail/thread_group.hpp>
+#include <boost/bind.hpp>
+#endif
+
 
 using namespace daffitter;
 //typedef double FITTERTYPE;
@@ -28,6 +34,17 @@ class Minimizer;
 class FwBw;
 
 class EstMat{
+private:
+  //simplex search functions
+  size_t getNSimplexParams();
+  gsl_vector* systemToEst();
+  gsl_vector* simplesStepSize();
+  void vectToEst(gsl_vector* v1, std::vector<int>& indexVector, vector<FITTERTYPE>& dataVector, size_t& param);
+  void multiVectToEst(gsl_vector* v1, std::vector<int>& indexVector, vector<FITTERTYPE>& dataVector, size_t& param);
+  //newtons method
+  FITTERTYPE stepVector(gsl_vector* vc, size_t index, FITTERTYPE value, bool doMSE, Minimizer* minimize);
+  //data
+  std::vector< std::vector<Measurement<FITTERTYPE> > > tracks;
 public:
   //parameters
   std::vector<FITTERTYPE> resX, resY, radLengths, zPos, xShift, yShift, xScale, yScale, zRot;
@@ -37,8 +54,6 @@ public:
   std::vector<int> resXMulti, resYMulti, resXYMulti, radLengthsMulti;
   //ebeam
   double eBeam;
-  //data
-  std::vector< std::vector<Measurement<FITTERTYPE> > > tracks;
   TrackerSystem<FITTERTYPE, 4> system;
 
   //constructor
@@ -56,7 +71,6 @@ public:
   }
 
   //Action
-  void estimate();
   void plot(char* fname);
 
   //simulation
@@ -65,26 +79,19 @@ public:
 
   //initialization
   void setPlane(int index, double sigmaX, double sigmaY, double radLength);
-  void addPlane(FitPlane<FITTERTYPE>& pl);
   void addTrack( std::vector<Measurement<FITTERTYPE> > track);
-
   void movePlaneZ(int planeIndex, double deltaZ);
-  double minimizeMe();
-
-  size_t getNSimplexParams();
+  
   void estToSystem( const gsl_vector* params, TrackerSystem<FITTERTYPE, 4>& system);
-  gsl_vector* systemToEst();
-  gsl_vector* simplesStepSize();
   void simplexSearch(Minimizer* minimizeMe, size_t iterations, int restarts);
-  void quasiNewtonHomeMade(FwBw* minimizeMe, int iterations);
+  void quasiNewtonHomeMade(Minimizer* minimizeMe, int iterations);
   
   int itMax;
-  void readTrack(int track);
   void readTrack(int track, TrackerSystem<FITTERTYPE,4>& system);
   void clear(){ tracks.clear(); }
   void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim);
-  void parameterIteration( double step, double Orig, double min, double max, int index, void (*stepFun) (EstMat& mat, int index, double step)  );
-  void printParams( char* name, std::vector<FITTERTYPE>& params, bool plot);
+  void printParams( char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString);
+  void printAllFreeParams();
 };
 
 class Minimizer{
@@ -92,35 +99,39 @@ public:
   EstMat& mat;
   FITTERTYPE retVal2;
   size_t nThreads;
-  vector <double> results;
+  FITTERTYPE result;
+#if DOTHREAD
+  boost::mutex resultGurad;
+#endif
   vector<TrackerSystem<FITTERTYPE, 4> > systems;
 
   Minimizer(EstMat& mat) : mat(mat), nThreads(4) {;}
-  virtual FITTERTYPE operator() (void) = 0;
+  FITTERTYPE operator() (void);
+  virtual FITTERTYPE operator() (size_t offset, size_t stride) = 0;
   void init ();
   void prepareThreads();
-  FITTERTYPE sumResults();
+  virtual bool twoRetVals(){ return(false); }
 };
 
 class Chi2: public Minimizer {
 public:
   Chi2(EstMat& mat) : Minimizer(mat) {;}
-  virtual FITTERTYPE operator()(void);
+  virtual FITTERTYPE operator() (size_t offset, size_t stride);
 };
 
 class SDR: public Minimizer {
 public:
   bool SDR1, SDR2, cholDec;
   SDR(bool SDR1, bool SDR2, bool cholDec,  EstMat& mat): Minimizer(mat), SDR1(SDR1), SDR2(SDR2), cholDec(cholDec) {;}
-  virtual FITTERTYPE operator()(void);
+  virtual FITTERTYPE operator() (size_t offset, size_t stride);
 };
 
 class FwBw: public Minimizer {
 public:
-  FITTERTYPE retVal2;
   vector <FITTERTYPE> results2;
   FwBw(EstMat& mat): Minimizer(mat), results2(vector<FITTERTYPE>(4,0.0)) {;}
-  virtual FITTERTYPE operator()(void);
+  virtual FITTERTYPE operator() (size_t offset, size_t stride);
+  virtual bool twoRetVals() { return(true);}
 };
 
 double normRand();

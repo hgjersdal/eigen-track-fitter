@@ -1,36 +1,36 @@
 #include "estmat.h"
 
 void estimationParameters(EstMat& mat){
-//Setting up parameters for minimization. 
-//Pushing a plane index to the vector means the parameter will be estimated
-//Identical plane resolutions
-// mat.resXYMulti.push_back(0);
-// mat.resXYMulti.push_back(1);
-// mat.resXYMulti.push_back(2);
-// mat.resXYMulti.push_back(6);
-// mat.resXYMulti.push_back(7);
-// mat.resXYMulti.push_back(8);
-
-//Individual plane resolutions
-mat.resXIndex.push_back(3);
-mat.resXIndex.push_back(4);
-mat.resXIndex.push_back(5);
-mat.resYIndex.push_back(3);
-mat.resYIndex.push_back(4);
-mat.resYIndex.push_back(5);
+  //Setting up parameters for minimization. 
+  //Pushing a plane index to the vector means the parameter will be estimated
+  //Identical plane resolutions
+  // mat.resXYMulti.push_back(0);
+  // mat.resXYMulti.push_back(1);
+  // mat.resXYMulti.push_back(2);
+  // mat.resXYMulti.push_back(6);
+  // mat.resXYMulti.push_back(7);
+  // mat.resXYMulti.push_back(8);
   
-//Identical plane thicknesses
-//mat.radLengthsMulti.push_back(0);
-// mat.radLengthsMulti.push_back(1);
-// mat.radLengthsMulti.push_back(2);
-// mat.radLengthsMulti.push_back(6);
-// mat.radLengthsMulti.push_back(7);
-//mat.radLengthsMulti.push_back(8);
+  //Individual plane resolutions
+  mat.resXIndex.push_back(3);
+  mat.resXIndex.push_back(4);
+  mat.resXIndex.push_back(5);
+  mat.resYIndex.push_back(3);
+  mat.resYIndex.push_back(4);
+  mat.resYIndex.push_back(5);
   
-//Individual plane thicknesses
-mat.radLengthsIndex.push_back(3);
-mat.radLengthsIndex.push_back(4);
-mat.radLengthsIndex.push_back(5);
+  //Identical plane thicknesses
+  //mat.radLengthsMulti.push_back(0);
+  // mat.radLengthsMulti.push_back(1);
+  // mat.radLengthsMulti.push_back(2);
+  // mat.radLengthsMulti.push_back(6);
+  // mat.radLengthsMulti.push_back(7);
+  //mat.radLengthsMulti.push_back(8);
+  
+  //Individual plane thicknesses
+  mat.radLengthsIndex.push_back(3);
+  mat.radLengthsIndex.push_back(4);
+  mat.radLengthsIndex.push_back(5);
 }
 
 void simulateTracks(EstMat& mat, int nTracks){
@@ -51,7 +51,7 @@ void simulateTracks(EstMat& mat, int nTracks){
     mat.resY.at(ii) = 115.0;//115.47;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
-  mat.tracks.clear();
+  mat.clear();
   mat.simulate( nTracks );
   std::cout << "Done simulating" << endl;
 }
@@ -76,6 +76,29 @@ void initialGuess(EstMat& mat){
     mat.radLengths.at(ii) = 0.08 + 0.02 * gr1;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
+}
+
+void freeAndSetAlignVec(vector<int>& indexes, vector<FITTERTYPE>& values, double sigma){
+  for(int ii = 1; ii < 8; ii++){
+    indexes.push_back(ii);
+    double a, b;
+    gaussRand(a,b);
+    values.at(ii) = a * sigma;
+  }
+}
+
+void prepareAlingment(EstMat& mat){
+  mat.printAllFreeParams();
+
+  mat.resXIndex.clear();
+  mat.resYIndex.clear();
+  mat.radLengthsIndex.clear();
+
+  freeAndSetAlignVec(mat.xShiftIndex, mat.xShift, 5); //Gaussian spread of x shifts, 5um sigma around truth = 0um
+  freeAndSetAlignVec(mat.yShiftIndex, mat.yShift, 5); //Gaussian spread of y shifts, 5um sigma around truth = 0um
+  freeAndSetAlignVec(mat.xScaleIndex, mat.xScale, 0.1); //Gaussian spread of y scales, 0 is truth
+  freeAndSetAlignVec(mat.yScaleIndex, mat.yScale, 0.1); 
+  freeAndSetAlignVec(mat.zRotIndex, mat.zRot, 0.01); 
 }
 
 int main(int argc, char* argv[]){
@@ -107,11 +130,11 @@ int main(int argc, char* argv[]){
   for( int ii = 3; ii < 6; ii++) {
     char * name = new char[50];
     sprintf(name, "x%i", ii);
-    xposes.push_back(new TH1D(name, name,100, 11.5, 18.5));
+    xposes.push_back(new TH1D(name, name,100, 14.0, 16.0));
     sprintf(name, "y%i", ii);
-    yposes.push_back(new TH1D(name, name,100, 99.5, 130.5));
+    yposes.push_back(new TH1D(name, name,100, 110.0, 120.0));
     sprintf(name, "rad%i", ii);
-    radests.push_back(new TH1D(name, name,100, 0.02, 0.26));
+    radests.push_back(new TH1D(name, name,100, 0.06, 0.12));
   }
 
   estimationParameters(mat); //Configure which parameters to free in the fit
@@ -121,8 +144,11 @@ int main(int argc, char* argv[]){
     cout << "Outer iteration " << outeriter << endl;
     
     simulateTracks(mat, nTracks); //Configure true state in this function
-    initialGuess(mat); //Configure the tracker system from initial guesses
-
+    if(strcmp(argv[1], "align") != 0){
+      initialGuess(mat); //Set up initial guesses for material and resolutions
+    } else {
+      prepareAlingment(mat); //Set up initial guesses for alignment parameters
+    }
     //Set up the material estimation from the Tracker System
     for(size_t plane = 0; plane < mat.system.planes.size(); plane ++){
       mat.resX.at(plane) = mat.system.planes.at(plane).getSigmas()(0);
@@ -167,8 +193,12 @@ int main(int argc, char* argv[]){
       cout << "Starting minimization of type hybr" << endl;
       FwBw* minimize = new FwBw(mat);
       mat.quasiNewtonHomeMade(minimize, 40);
+    } else if(strcmp(argv[1], "align") == 0){
+      cout << "Running alignment!" << endl;
+      Minimizer* minimizer = new Chi2(mat);
+      mat.simplexSearch(minimizer, 2000, 10);
     } else {
-      cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3 or hybr" << endl;
+      cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3, hybr or align" << endl;
       return(1);
     }
     cout << "Done estimating" << endl << endl << endl;
