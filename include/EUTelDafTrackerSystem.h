@@ -270,7 +270,7 @@ namespace daffitter{
     void addPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatterVariance, bool excluded);
     void addMeasurement(size_t planeIndex, T x, T y, T z, bool goodRegion, size_t iden);
     void addMeasurement(Measurement<T>& meas);
-    void init();
+    void init(bool quiet = false);
     void clear();
     void setMaxCandidates(int nCandidates);
     size_t getNtracks() const { return(m_nTracks); };

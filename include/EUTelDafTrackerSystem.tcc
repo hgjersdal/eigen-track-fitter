@@ -82,7 +82,7 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
     const FitPlane<T>& pl = sys.planes.at(ii);
     this->addPlane(pl.getSensorID(), pl.getZpos(), pl.getSigmaX(), pl.getSigmaY(), pl.getScatterThetaSqr(), pl.isExcluded());
   }
-  this->init();
+  this->init(true);
 }
 
 template <typename T,size_t N>
@@ -129,13 +129,15 @@ template<typename T>
 inline bool planeSort(FitPlane<T>  p1, FitPlane<T>  p2){ return( p1.getZpos() < p2.getZpos() );}
 
 template <typename T,size_t N>
-void TrackerSystem<T, N>::init(){
+void TrackerSystem<T, N>::init(bool quiet){
   //Initialize the tracker system:
   //  - All planes are sorted by z position, information about the planes are printed to screen.
   //  - Memory is allocated for track candidates and MC truth
   sort(planes.begin(), planes.end(), planeSort<T>);
-  for(int ii = 0; ii < (int) planes.size(); ii++){
-    planes.at(ii).print();
+  if(not quiet){
+    for(int ii = 0; ii < (int) planes.size(); ii++){
+      planes.at(ii).print();
+    }
   }
   m_fitter = new EigenFitter<T, N>( planes.size() );
   tracks.resize( m_maxCandidates);

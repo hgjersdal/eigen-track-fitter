@@ -79,6 +79,7 @@ void initialGuess(EstMat& mat){
 }
 
 void freeAndSetAlignVec(vector<int>& indexes, vector<FITTERTYPE>& values, double sigma){
+  indexes.clear();
   for(int ii = 1; ii < 8; ii++){
     indexes.push_back(ii);
     double a, b;
@@ -87,18 +88,18 @@ void freeAndSetAlignVec(vector<int>& indexes, vector<FITTERTYPE>& values, double
   }
 }
 
-void prepareAlingment(EstMat& mat){
+void prepareAlignment(EstMat& mat){
   mat.printAllFreeParams();
 
   mat.resXIndex.clear();
   mat.resYIndex.clear();
   mat.radLengthsIndex.clear();
 
-  freeAndSetAlignVec(mat.xShiftIndex, mat.xShift, 5); //Gaussian spread of x shifts, 5um sigma around truth = 0um
-  freeAndSetAlignVec(mat.yShiftIndex, mat.yShift, 5); //Gaussian spread of y shifts, 5um sigma around truth = 0um
+  freeAndSetAlignVec(mat.xShiftIndex, mat.xShift, 500); //Gaussian spread of x shifts, 500um sigma around truth = 0um
+  freeAndSetAlignVec(mat.yShiftIndex, mat.yShift, 500); //Gaussian spread of y shifts, 500um sigma around truth = 0um
   freeAndSetAlignVec(mat.xScaleIndex, mat.xScale, 0.1); //Gaussian spread of y scales, 0 is truth
   freeAndSetAlignVec(mat.yScaleIndex, mat.yScale, 0.1); 
-  freeAndSetAlignVec(mat.zRotIndex, mat.zRot, 0.01); 
+  freeAndSetAlignVec(mat.zRotIndex, mat.zRot, 0.1); 
 }
 
 int main(int argc, char* argv[]){
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]){
   double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
   int nTracks = 40000; //How many tracks to simulate per experiment
-  int numberOfExperiments = 100; //How many simulation + estimation estimates should be preformed
+  int numberOfExperiments = 10; //How many simulation + estimation estimates should be preformed
 
   EstMat mat;
   mat.init(ebeam, nPlanes); //Initialize the the estimator
@@ -144,10 +145,11 @@ int main(int argc, char* argv[]){
     cout << "Outer iteration " << outeriter << endl;
     
     simulateTracks(mat, nTracks); //Configure true state in this function
+    initialGuess(mat); //Set up initial guesses for material and resolutions
     if(strcmp(argv[1], "align") != 0){
-      initialGuess(mat); //Set up initial guesses for material and resolutions
+      //initialGuess(mat); //Set up initial guesses for material and resolutions
     } else {
-      prepareAlingment(mat); //Set up initial guesses for alignment parameters
+      prepareAlignment(mat); //Set up initial guesses for alignment parameters
     }
     //Set up the material estimation from the Tracker System
     for(size_t plane = 0; plane < mat.system.planes.size(); plane ++){

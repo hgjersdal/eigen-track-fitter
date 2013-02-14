@@ -714,7 +714,6 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
   itMax = tracks.size();
   
   for(int ii = 0; ii < restarts; ii++){
-    if (ii > 0) { cout << "STARTING RESTART " << ii << endl;}
     const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
     gsl_multimin_fminimizer *s = NULL;
     gsl_vector *ss, *x;
@@ -752,8 +751,8 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
 	printf ("converged to minimum at\n");
       }
 
-      if(iter % 10 == 0){
-	cout << "Iteration " << iter << endl;
+      if(iter % 100 == 0){
+	cout << "Iteration " << iter << ", restart " << ii << endl;
 	printf ("%5d %10.3e %10.3e f() = %7.7f size = %.7f\n", 
 		(int)iter,
 		gsl_vector_get (s->x, 0), 

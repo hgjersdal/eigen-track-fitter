@@ -22,9 +22,9 @@ The simulation experiments use root for plotting.
 	   ./estmat <option>
 where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr3`, `hybr` or `align`.
 
-The `align` option works diffrently from all the others in that is uses a simplex search to minimize chi2 by manipulating alignment parameters, not thicknesses and resolution. The alignment parameters should all be 0. The default settings uses more iterations and restarts, due to the fact that there are more parameters to be estimated.
-
 This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads.
+
+The `align` option works diffrently from all the others in that is uses a simplex search to minimize chi2 by manipulating alignment parameters, not thicknesses and resolution. The alignment parameters should all be 0. The default settings uses more iterations and restarts, due to the fact that there are more parameters to be estimated.
 
 ## Caveats
 Note that the material estimator does not work well for electrons. Electrons lose a substantial amount energy through Bremsstrahlung, a highly non Gaussian process. This means the beam energy after material has been traversed in non uniform, and not Gaussianly distributed. Since there is no way of estimating the particle energy from a straight line track, all beam particles must be assumed to have the same amount of scattering, and this is simply not a good approximation. A method that works somewhat, is to use the FWBW estimator on a track sample after a very tight cut on the chi2 (in the area of maybe n.d.o.f. times 2 or 3).
