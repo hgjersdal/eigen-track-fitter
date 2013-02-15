@@ -16,7 +16,11 @@ The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear 
 
 The simulation experiments use root for plotting.
 
-##Building and running the material estimator
+##Building and running
+
+	   make simple
+	   ./simple
+will simulate 1M tracks, and refit them with CKF + DAF. Residuals and chi2 is plotted to plots/simple.root.
 
 	   make estmat
 	   ./estmat <option>
