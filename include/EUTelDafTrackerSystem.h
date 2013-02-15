@@ -246,7 +246,7 @@ namespace daffitter{
     size_t m_nTracks, m_maxCandidates, m_minClusterSize;
  
     T m_dafChi2, m_ckfChi2, m_chi2OverNdof, m_sqrClusterRadius;
-    T m_nXdz, m_nYdz;
+    T m_nXdz, m_nYdz, m_nXdzdeviance, m_nYdzdeviance;
     
     int addNeighbors(std::vector<PlaneHit<T> > &candidate, std::list<PlaneHit<T> > &hits);
     T runTweight(T t);
@@ -254,6 +254,8 @@ namespace daffitter{
     T fitPlanesInfoDafBiased();
     T getNominalXdz() const { return(m_nXdz); }
     T getNominalYdz() const { return(m_nYdz); }
+    T getXdzMaxDeviance() const { return(m_nXdzdeviance); }
+    T getYdzMaxDeviance() const { return(m_nYdzdeviance); }
     size_t getMinClusterSize() const { return(m_minClusterSize); }
     void checkNan(TrackEstimate<T,N>* e);
     //CKF
@@ -290,6 +292,8 @@ namespace daffitter{
     void setClusterRadius(T rad) { m_sqrClusterRadius = rad * rad;}
     void setNominalXdz(T xdz) { m_nXdz = xdz; }
     void setNominalYdz(T ydz) { m_nYdz = ydz; }
+    void setXdzMaxDeviance(T xdz) { m_nXdzdeviance = xdz; }
+    void setYdzMaxDeviance(T ydz) { m_nYdzdeviance = ydz; }
     void setMinClusterSize( size_t n) { m_minClusterSize = n; }
     void intersect();
 

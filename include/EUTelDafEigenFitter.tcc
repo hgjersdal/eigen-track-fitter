@@ -73,7 +73,7 @@ void EigenFitter<T,N>::addScatteringInfo(const FitPlane<T>& pl, TrackEstimate<T,
   //inv( C + H Q H')x = Wx - W H inv(inv(Q) + H' W H ) H' Wx
  
   //Assuming diagonal Q, no covariance between angles in the fit.
-  //W H inv(inv(Q) + H' W H ) H' and e->cov are not fully populated, 
+  //W H inv(inv(Q) + H' W H ) H' and e->cov are not fully populated,
   //the following takes advantage of this.
   T scattervar2 = 1.0f/(e->cov(2,2) + 1.0f/ pl.getScatterThetaSqr());
   T scattervar3 = 1.0f/(e->cov(3,3) + 1.0f/ pl.getScatterThetaSqr());
@@ -89,7 +89,7 @@ void EigenFitter<T,N>::addScatteringInfo(const FitPlane<T>& pl, TrackEstimate<T,
   e->cov(2,0) = e->cov(0,2);
   e->cov(3,3) -= c33 * c33 * scattervar3; 
   e->cov(3,1) = e->cov(1,3);
-  
+
   T p2 = e->params(2);
   T p3 = e->params(3);
   e->params(0) -= scattervar2 * c20 * p2; 
@@ -97,6 +97,7 @@ void EigenFitter<T,N>::addScatteringInfo(const FitPlane<T>& pl, TrackEstimate<T,
   e->params(2) -= scattervar2 * c22 * p2; 
   e->params(3) -= scattervar3 * c33 * p3; 
 }
+
 namespace daffitter{
   template <typename T, size_t N>
   inline void EigenFitter<T, N>::predictInfo(const FitPlane<T> &prev, const FitPlane<T> &cur, TrackEstimate<T, N>* e){

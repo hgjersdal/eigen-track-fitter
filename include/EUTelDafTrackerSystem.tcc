@@ -68,7 +68,7 @@ inline void FitPlane<T>::print(){
 
 
 template <typename T, size_t N>
-TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0) {
+TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0), m_nXdzdeviance(0.01),m_nYdzdeviance(0.01) {
   //Constructor for the system of detector planes.
   ;
 }
@@ -898,8 +898,8 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     } else if(nMeas == 1){ 
       //Check angle of second plane
       double newZ = planes.at(plane).getZpos();
-      if ( (fabs((mm.getX() - oldX)/(newZ - oldZ) - getNominalXdz()) < 0.0005) and
-	   (fabs((mm.getY() - oldY)/(newZ - oldZ) - getNominalYdz()) < 0.0005)){ filterMeas = true;}
+      if ( (fabs((mm.getX() - oldX)/(newZ - oldZ) - getNominalXdz()) < getXdzMaxDeviance()) and
+	   (fabs((mm.getY() - oldY)/(newZ - oldZ) - getNominalYdz()) < getYdzMaxDeviance())){ filterMeas = true;}
     } else if(nMeas == 0){ 
       // Try all measurements in first plane
       filterMeas = true;
