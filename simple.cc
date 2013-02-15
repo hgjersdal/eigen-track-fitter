@@ -1,6 +1,7 @@
 #include <cmath>
 #include "EUTelDafTrackerSystem.h"
 #include <TH1D.h>
+#include <TFile.h>
 /*
 Simnple application og the straight line track fitter
 */
@@ -31,13 +32,30 @@ double getScatterSigma(double eBeam, double radLength){
 int main(){
   double ebeam = 100.0;
   int nPlanes = 9;
+
+  //Initialize histograms
+  vector <TH1D*> resX;
+  vector <TH1D*> resY;
+  TH1D* chi2  = new TH1D("chi2","chi2",100,0,50);
+  for(int ii = 0; ii < nPlanes; ii++){
+    char name[100];
+    sprintf(name, "resX%i", ii);
+    resX.push_back( new TH1D(name,name,100, -50, 50));
+    sprintf(name, "resY%i", ii);
+    resY.push_back( new TH1D(name,name,100, -50, 50));
+  }
+
   TrackerSystem<float,4> system;
-  system.setCKFChi2Cut(20.0f);
-  system.setNominalXdz(0.0f);
-  system.setNominalYdz(0.0f);
-  system.setChi2OverNdofCut( 100.0f);
-  system.setDAFChi2Cut( 1000.0f);
+  //Configure track finder, these cuts are in place to let everything pass
+  system.setCKFChi2Cut(1000.0f); //Cut on the chi2 increment for the inclusion of a new measurement for combinatorial KF 
+  system.setChi2OverNdofCut( 1000.0f); //Chi2 / ndof cut for the combinatorial KF to accept the track
+  system.setNominalXdz(0.0f); //Nominal beam angle
+  system.setNominalYdz(0.0f); //Nominal beam angle
+  system.setXdzMaxDeviance(1.0f);//How far og the nominal angle can the first two measurements be?q
+  system.setYdzMaxDeviance(1.0f);//How far og the nominal angle can the first two measurements be?
+  system.setDAFChi2Cut( 100.0f); // DAF chi2 cut-off
   
+  //Add planes to the tracker system
   float scattertheta = getScatterSigma(ebeam,.1);  
   float scattervar = scattertheta * scattertheta;
   system.addPlane(0, 10    , 4.3f, 4.3f, scattervar,  false);
@@ -51,15 +69,12 @@ int main(){
   system.addPlane(8, 980010, 4.3f, 4.3f,  scattervar, false);
   system.init();
   
-  TH1D* histo = new TH1D("","",300,0,40);
-  double ndof;
-
-  int nTracks = 1000000;
+  int nTracks = 1000000; //Number of tracks to be simulated
 
   for(int ii = 0; ii < nTracks ;ii++){
     system.clear();
 
-    //simulate
+    //simulate tracks with scattering
     double x(0.0f), y(0.0f), dx(0.0f), dy(0.0f);
     gaussRand(x, y);
     x *= 10000.0;
@@ -78,25 +93,46 @@ int main(){
       dx += g1 * getScatterSigma(ebeam, 0.1);
       dy += g2 * getScatterSigma(ebeam, 0.1);
       gaussRand(g1, g2);
+      //Add a measurement to the tracker system at plane pl
       system.addMeasurement(pl, x + g1 * 4.3f, y + g2 * 4.3f, system.planes.at(pl).getZpos(), true, pl);
     }
+
     //Track finder
     system.combinatorialKF();
+    //Loop over track candidates
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
-      //fit track
-      system.indexToWeight(system.tracks.at(ii));
-      system.fitPlanesInfoDaf(system.tracks.at(ii));
-      //system.fitPlanesInfoBiased(system.tracks.at(ii));
-      histo->Fill(system.tracks.at(ii)->chi2);
-      ndof = system.tracks.at(ii)->ndof;
+      if( ii > 0) { cout << "Several candidates!!!" << endl; }
+      TrackCandidate<float, 4>* track =  system.tracks.at(ii);
+      //Prepare track candidate for DAF fitting by assigning weights to measurements.
+      system.indexToWeight( track );
+      //Fit track with DAF. Also calculates DAF approximation of chi2 and ndof
+      system.fitPlanesInfoDaf( track );
+      //Extract the indexes from DAF weights for easy plotting
+      system.weightToIndex( track );
+      //Fill plots
+      chi2->Fill(track->chi2);
+      for(int pl = 0; pl < system.planes.size(); pl++){
+	//Index of measurement used by track
+	int index = track->indexes.at(pl);
+	//If index is -1, no measurement was used in the plane
+	if( index < 0) {continue;}
+	//               x position of track at plane pl  - x position of measurement with index index at plane pl
+	resX.at(pl)->Fill( track->estimates.at(pl)->getX() - system.planes.at(pl).meas.at(index).getX()  );
+	resY.at(pl)->Fill( track->estimates.at(pl)->getY() - system.planes.at(pl).meas.at(index).getY()  );
+      }
     }
   }
-  cout << "(let ((histo (list :min 0 :bin-size " << histo->GetBinWidth(2) <<" :data (list ";
-  for(int bin = 1; bin <= histo->GetNbinsX(); bin++){
-    cout << " " << histo->GetBinContent(bin) / (histo->GetBinWidth(2) * nTracks);
+
+  //Save plots to a root file
+  TFile* tfile = new TFile("plots/simple.root", "RECREATE");
+  chi2->Write();
+  for( int ii = 0; ii < system.planes.size(); ii++) {
+    resX.at( ii )->Write();
+    resY.at( ii )->Write();
   }
-  cout << "))))" << endl;
-  cout << "ndof " << ndof << endl;
-  cout << "histo mean " << histo->GetMean() << "," << histo->GetNormFactor() << endl;
+  cout << "Plotting to plots/simple.root" << endl;
+  tfile->Close();
+  
+  return(0);
 }
 
