@@ -103,6 +103,12 @@ void prepareAlignment(EstMat& mat){
 }
 
 int main(int argc, char* argv[]){
+
+  if(argc < 2) {
+    cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3, hybr or align" << endl;
+    return(1);
+  }
+
   //Configure system, simulate tracks, and estimate material and resolution
   double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
@@ -145,10 +151,9 @@ int main(int argc, char* argv[]){
     cout << "Outer iteration " << outeriter << endl;
     
     simulateTracks(mat, nTracks); //Configure true state in this function
-    initialGuess(mat); //Set up initial guesses for material and resolutions
-    if(strcmp(argv[1], "align") != 0){
-      //initialGuess(mat); //Set up initial guesses for material and resolutions
-    } else {
+    initialGuess(mat); //Set up initial guesses for material and resolutions, 
+    //alignment should work with bad resolution and material budget estimates
+    if(strcmp(argv[1], "align") == 0){
       prepareAlignment(mat); //Set up initial guesses for alignment parameters
     }
     //Set up the material estimation from the Tracker System
@@ -168,10 +173,7 @@ int main(int argc, char* argv[]){
     //Parsing argument, doing minimization
     int iterations = 300; //How many iterations per restart?
     int restarts = 3; // How many times should the simplex search be restarted?
-    if(argc < 2) {
-      cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3 or hybr" << endl;
-      return(1);
-    } else if(strcmp(argv[1], "fwbw") == 0){
+    if(strcmp(argv[1], "fwbw") == 0){
       cout << "Starting minimization of type fwbw" << endl;
       Minimizer* minimize = new FwBw(mat);
       mat.simplexSearch(minimize, iterations, restarts);
@@ -191,14 +193,25 @@ int main(int argc, char* argv[]){
       cout << "Starting minimization of type SDR3" << endl;
       Minimizer* minimize = new SDR(true,true,false,mat);
       mat.simplexSearch(minimize, iterations, restarts);
+    } else if(strcmp(argv[1], "fake") == 0){
+      cout << "Starting minimization of type fake chi2" << endl;
+      Minimizer* minimize = new FakeChi2(mat);
+      mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "hybr") == 0){
       cout << "Starting minimization of type hybr" << endl;
       FwBw* minimize = new FwBw(mat);
       mat.quasiNewtonHomeMade(minimize, 40);
     } else if(strcmp(argv[1], "align") == 0){
       cout << "Running alignment!" << endl;
-      Minimizer* minimizer = new Chi2(mat);
-      mat.simplexSearch(minimizer, 2000, 10);
+      Minimizer* minimizer = new FakeChi2(mat);
+      //Minimizer* minimizer = new FwBw(mat); //<- Should also work, but slower and seems to preform slightly worse (no real comparison performed)
+      //Simplex search, starting with 1k tracks, then full sample
+      cout << "1K tracks" << endl;
+      mat.simplexSearch(minimizer, 2000, 15, 1000);
+      cout << "Full track sample" << endl;
+      mat.simplexSearch(minimizer, 3000, 1, nTracks);
+      //mat.quasiNewtonHomeMade(minimizer, 100);
+      return(0); //No plots are filled, no reason to do it 100 times
     } else {
       cout << "Needs an argument, fwbw, sdr1, sdr2, sdr3, hybr or align" << endl;
       return(1);

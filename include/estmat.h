@@ -16,6 +16,7 @@
 #include <Eigen/Cholesky>
 
 #include "EUTelDafTrackerSystem.h"
+#include "simutils.h"
 
 #include <gsl/gsl_vector_double.h>
 
@@ -83,7 +84,7 @@ public:
   void movePlaneZ(int planeIndex, double deltaZ);
   
   void estToSystem( const gsl_vector* params, TrackerSystem<FITTERTYPE, 4>& system);
-  void simplexSearch(Minimizer* minimizeMe, size_t iterations, int restarts);
+  void simplexSearch(Minimizer* minimizeMe, size_t iterations, int restarts, size_t itMax = 1000000);
   void quasiNewtonHomeMade(Minimizer* minimizeMe, int iterations);
   
   int itMax;
@@ -95,6 +96,7 @@ public:
 };
 
 class Minimizer{
+  bool inited;
 public:
   EstMat& mat;
   FITTERTYPE retVal2;
@@ -105,36 +107,51 @@ public:
 #endif
   vector<TrackerSystem<FITTERTYPE, 4> > systems;
 
-  Minimizer(EstMat& mat) : mat(mat), nThreads(4) {;}
+  Minimizer(EstMat& mat) : inited(false), mat(mat), nThreads(4) {;}
   FITTERTYPE operator() (void);
-  virtual FITTERTYPE operator() (size_t offset, size_t stride) = 0;
-  void init ();
+  virtual void operator() (size_t offset, size_t stride) = 0;
   void prepareThreads();
+  virtual void init ();
   virtual bool twoRetVals(){ return(false); }
 };
 
 class Chi2: public Minimizer {
 public:
   Chi2(EstMat& mat) : Minimizer(mat) {;}
-  virtual FITTERTYPE operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride);
+};
+
+class FakeChi2: public Minimizer {
+protected:
+  std::vector<FITTERTYPE> resFWErrorX;
+  std::vector<FITTERTYPE> resFWErrorY;
+  std::vector<FITTERTYPE> resBWErrorX;
+  std::vector<FITTERTYPE> resBWErrorY;
+  bool firstRun;
+public:
+  FakeChi2(EstMat& mat) : Minimizer(mat), firstRun(false) {;}
+  void calibrate(TrackerSystem<FITTERTYPE,4>& system);
+  virtual void init();
+  virtual void operator() (size_t offset, size_t stride);
+};
+
+class FakeAbsDev: public FakeChi2 {
+public:
+  FakeAbsDev(EstMat& mat) : FakeChi2(mat) {;}
+  virtual void operator() (size_t offset, size_t stride);
 };
 
 class SDR: public Minimizer {
 public:
   bool SDR1, SDR2, cholDec;
   SDR(bool SDR1, bool SDR2, bool cholDec,  EstMat& mat): Minimizer(mat), SDR1(SDR1), SDR2(SDR2), cholDec(cholDec) {;}
-  virtual FITTERTYPE operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride);
 };
 
 class FwBw: public Minimizer {
 public:
   vector <FITTERTYPE> results2;
   FwBw(EstMat& mat): Minimizer(mat), results2(vector<FITTERTYPE>(4,0.0)) {;}
-  virtual FITTERTYPE operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride);
   virtual bool twoRetVals() { return(true);}
 };
-
-double normRand();
-void gaussRand(double& x1, double& x2);
-double getScatterSigma(double eBeam, double radLength);
-

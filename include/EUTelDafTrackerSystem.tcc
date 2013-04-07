@@ -74,9 +74,12 @@ TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_
 }
 
 template <typename T, size_t N>
-TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(false), m_maxCandidates(1), 
-								    m_minClusterSize(sys.m_minClusterSize), m_nXdz(sys.m_nXdz),
-								    m_nYdz(sys.m_nYdz) {
+TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(false), m_maxCandidates(sys.m_maxCandidates), 
+								    m_minClusterSize(sys.m_minClusterSize), 
+								    m_nXdz(sys.m_nXdz), m_nYdz(sys.m_nYdz),
+								    m_nXdzdeviance(sys.m_nXdzdeviance), m_nYdzdeviance(sys.m_nYdzdeviance),
+								    m_dafChi2(sys.m_dafChi2), m_ckfChi2(sys.m_ckfChi2), 
+								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius){
   cout << "Cloning tracker system:" << endl;
   for(size_t ii = 0; ii < sys.planes.size(); ii++){
     const FitPlane<T>& pl = sys.planes.at(ii);
@@ -353,6 +356,7 @@ void TrackerSystem<T, N>::smoothInfo(TrackCandidate<T, N> *candidate){
     candidate->estimates.at(ii)->copy( m_fitter->smoothed.at(ii) );
   }
 }
+
 template <typename T,size_t N>
 void TrackerSystem<T, N>::fitPlanesInfoBiased(TrackCandidate<T, N> *candidate){
   // Get smoothed,biased, estimates for all planes.  Also get the chi2, ndof
@@ -392,7 +396,6 @@ void TrackerSystem<T, N>::getChi2Kf(TrackCandidate<T, N> *candidate){
   candidate->chi2 = chi2; 
   candidate->ndof = (ndof * 2) - 4;
 }
-
 
 template <typename T,size_t N>
 void TrackerSystem<T, N>::getChi2BiasedInfo(TrackCandidate<T, N> *candidate){
@@ -840,7 +843,7 @@ template <typename T,size_t N>
 void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, int nSkipped, vector<int> &indexes, int nMeas){
   //Check a branch of the track tree. Either kill it or, let it live.
   if( getNtracks() >= m_maxCandidates){
-    cout << "Reached max of " << m_maxCandidates << endl;
+    cout << "Reached maximum number of track candidates, " << m_maxCandidates << endl;
     return;
   }
   //Last plane, save and quit

@@ -235,8 +235,8 @@ void EUTelDafMaterial::dafEvent (LCEvent * event) {
       }
       //Fill plots
       if(_histogramSwitch){ 
-	//fillDetailPlots( _system.tracks.at(ii) ); 
-	//fillPlots( _system.tracks.at(ii) ); 
+	fillDetailPlots( _system.tracks.at(ii) ); 
+	fillPlots( _system.tracks.at(ii) ); 
       }
       _matest.addTrack(track);
       _nTracks++;
@@ -258,7 +258,8 @@ void EUTelDafMaterial::dafEnd() {
   //Add planes to material estimator fitter
   for( size_t ii = 0; ii< _system.planes.size(); ii++){
     _system.planes.at(ii).include();
-    _matest.addPlane(_system.planes.at(ii));
+    FitPlane<float>& plane = _system.planes.at(ii);
+    _matest.system.addPlane(ii,ii, plane.getSigmaX(), plane.getSigmaY(), plane.getScatterThetaSqr(), plane.isExcluded() );
   }
 
   //These tracks have already been found, use very wide cuts.
@@ -304,15 +305,17 @@ void EUTelDafMaterial::dafEnd() {
   }
   
   std::cout << "Starting estimation assuming beam energy of " << _eBeam << std::endl;
-  //_matest.plot((char*) "/home/haavagj/preestmat.root");
+  _matest.plot((char*) "/home/haavagj/preestmat.root");
   
   //Start minimization
   // Minimizer* minimize = new FwBw(_matest); //FWBW
   // Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
   // Minimizer* minimize = new SDR(false,true,false,_matest); //SDR2
   Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3, 
-  _matest.simplexSearch(minimize, 500, 3);
-
+  //Minimizer* minimize = new FakeChi2(_matest);
+  //Minimizer* minimize = new FakeAbsDev(_matest);
+  _matest.simplexSearch(minimize, 3000, 30);
+  
   // FwBw* minimize = new FwBw(_matest); //FWBW
   // _matest.quasiNewtonHomeMade(minimize, 40);
 
@@ -322,6 +325,6 @@ void EUTelDafMaterial::dafEnd() {
   //_matest.quasiNewtonHomeMade(minimize, 1000);
   
   //Plot the resulting pulls, residuals, chi2s
-  //_matest.plot((char*) "/home/haavagj/estmat.root");
+  _matest.plot((char*) "/home/haavagj/estmat.root");
 }
 #endif // USE_GEAR

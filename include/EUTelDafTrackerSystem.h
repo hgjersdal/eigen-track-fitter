@@ -244,9 +244,9 @@ namespace daffitter{
     //EigenFitter* m_fitter;
     bool m_inited;
     size_t m_nTracks, m_maxCandidates, m_minClusterSize;
- 
-    T m_dafChi2, m_ckfChi2, m_chi2OverNdof, m_sqrClusterRadius;
+
     T m_nXdz, m_nYdz, m_nXdzdeviance, m_nYdzdeviance;
+    T m_dafChi2, m_ckfChi2, m_chi2OverNdof, m_sqrClusterRadius;
     
     int addNeighbors(std::vector<PlaneHit<T> > &candidate, std::list<PlaneHit<T> > &hits);
     T runTweight(T t);

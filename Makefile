@@ -19,5 +19,8 @@ LDFLAGS      := $(ROOTLDFLAGS) $(LDFLAGS)
 simple: simple.cc
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
 
+multitrack: multitrack.cc
+	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
+
 estmat: estmatapp.cc ./src/estmat.cc 
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
