@@ -1,5 +1,6 @@
 #ifndef SIMUTILS
 #define SIMUTILS
+
 inline double normRand(){
   return( (double) random() / (double) RAND_MAX);
 }
@@ -22,4 +23,5 @@ inline double getScatterSigma(double eBeam, double radLength){
   double scatterTheta = 0.0136f/ eBeam * sqrt( radLength ) *  (1.0f + 0.038f * std::log(radLength) );
   return(scatterTheta);
 }
+
 #endif

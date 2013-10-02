@@ -1,26 +1,89 @@
 #include <cmath>
 #include "EUTelDafTrackerSystem.h"
-#include "simutils.h"
 #include <TH1D.h>
 #include <TFile.h>
+#include <TMath.h>
+
+// #ifndef USE_GEAR
+// #include <boost/thread.hpp>
+// #include <boost/thread/detail/thread_group.hpp>
+// #include <boost/bind.hpp>
+// #endif
+
+//boost::mutex plotGuard;
+//boost::mutex randGuard;
+
+#include "simutils.h"
+//#include "simfunction.h"
+
 /*
 Simnple application og the straight line track fitter
 */
+
+void printHisto(TH1D* histo){
+  cout << "(list" 
+       <<  " :min " << histo->GetXaxis()->GetXmin()
+       << " :bin-size " << histo->GetBinWidth( 0 ) << endl
+       << ":data (list" << endl;
+  for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
+    cout << " " << histo->GetBinContent( ii );
+  }
+  cout << endl << "))" << endl;
+}
+
+void lispify(vector <TH1D*> &pulls, TH1D* chi2, TH1D* pvals, const char* name){
+  std::cout << "(defparameter *" << name << "*" << endl;
+  std::cout << "(list" << std::endl;
+  std::cout << ":chi2 ";
+  printHisto(chi2);
+
+  std::cout << ":p-val ";
+  printHisto(pvals);
+
+  //Pull histograms
+  for(int ii = 0; ii < pulls.size(); ii++){
+    std::cout << ":histo" << ii << " ";
+    printHisto(pulls.at(ii));
+  }
+  //Pull means
+  std::cout << ":means (list";
+  for(int ii = 0; ii < pulls.size(); ii++){
+    cout << " " << pulls.at(ii)->GetMean();
+  }
+  cout << endl << ")" << endl;
+  //Pull sigmas
+  std::cout << ":sigmas (list";
+  for(int ii = 0; ii < pulls.size(); ii++){
+    cout << " " << pulls.at(ii)->GetRMS();
+  }
+  cout << endl << ")" << endl;
+
+  std::cout << "))" << std::endl; //closes list and defparameter
+}
 
 int main(){
   double ebeam = 100.0;
   int nPlanes = 9;
 
+  srandom(time(NULL));
+
   //Initialize histograms
   vector <TH1D*> resX;
   vector <TH1D*> resY;
+  vector <TH1D*> pullX;
+  vector <TH1D*> pullY;
   TH1D* chi2  = new TH1D("chi2","chi2",100,0,50);
+  TH1D* pvals  = new TH1D("pvals","pvals",100,0,1);
   for(int ii = 0; ii < nPlanes; ii++){
     char name[100];
     sprintf(name, "resX%i", ii);
     resX.push_back( new TH1D(name,name,100, -50, 50));
     sprintf(name, "resY%i", ii);
     resY.push_back( new TH1D(name,name,100, -50, 50));
+    sprintf(name, "pullX%i", ii);
+    pullX.push_back( new TH1D(name,name,100, -5, 5));
+    sprintf(name, "pullY%i", ii);
+    pullY.push_back( new TH1D(name,name,100, -5, 5));
   }
 
   TrackerSystem<float,4> system;
@@ -54,9 +117,11 @@ int main(){
 
     //simulate tracks with scattering
     double x(0.0f), y(0.0f), dx(0.0f), dy(0.0f);
-    gaussRand(x, y);
-    x *= 10000.0;
-    y *= 10000.0;
+    // gaussRand(x, y);
+    // x *= 10000.0;
+    // y *= 10000.0;
+    x = normRand() * 10000.0f;
+    y = normRand() * 10000.0f;
     double g1, g2;
     gaussRand(g1, g2);
     dx += g1 * 0.0001;
@@ -73,6 +138,7 @@ int main(){
       gaussRand(g1, g2);
       //Add a measurement to the tracker system at plane pl
       system.addMeasurement(pl, x + g1 * 4.3f, y + g2 * 4.3f, system.planes.at(pl).getZpos(), true, pl);
+      //cout << "pl " << pl << " x: " << x + g1 * 4.3f << " y: " << y + g2 * 4.3f << endl;
     }
 
     //Track finder
@@ -89,14 +155,23 @@ int main(){
       system.weightToIndex( track );
       //Fill plots
       chi2->Fill(track->chi2);
+      pvals->Fill( TMath::Gamma( track->ndof / 2, track->chi2 / 2.0) );
+      Matrix<float, 2, 1> residuals;
+      Matrix<float, 2, 1> reserror;
       for(int pl = 0; pl < system.planes.size(); pl++){
 	//Index of measurement used by track
 	int index = track->indexes.at(pl);
 	//If index is -1, no measurement was used in the plane
 	if( index < 0) {continue;}
 	//               x position of track at plane pl  - x position of measurement with index index at plane pl
-	resX.at(pl)->Fill( track->estimates.at(pl)->getX() - system.planes.at(pl).meas.at(index).getX()  );
-	resY.at(pl)->Fill( track->estimates.at(pl)->getY() - system.planes.at(pl).meas.at(index).getY()  );
+	residuals = system.getResiduals(system.planes.at(pl).meas.at(index), track->estimates.at(pl));
+	reserror = system.getUnBiasedResidualErrors(system.planes.at(pl), track->estimates.at(pl));
+
+	resX.at(pl)->Fill( residuals[0] );
+	resY.at(pl)->Fill( residuals[1] );
+
+	pullX.at(pl)->Fill( residuals[0] / sqrt(reserror[0]) );
+	pullY.at(pl)->Fill( residuals[1] / sqrt(reserror[1]) );
       }
     }
   }
@@ -107,9 +182,15 @@ int main(){
   for( int ii = 0; ii < system.planes.size(); ii++) {
     resX.at( ii )->Write();
     resY.at( ii )->Write();
+    pullX.at( ii )->Write();
+    pullY.at( ii )->Write();
   }
+
   cout << "Plotting to plots/simple.root" << endl;
   tfile->Close();
+
+
+  lispify(pullX, chi2, pvals, "pullX");
   
   return(0);
 }

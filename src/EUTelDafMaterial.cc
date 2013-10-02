@@ -176,7 +176,8 @@ int EUTelDafMaterial::checkDutResids(daffitter::TrackCandidate<float, 4> * track
       if( (estim->getX() - meas.getX()) > resX.second){ includeMeas = false; }
       if( (estim->getY() - meas.getY()) < resY.first) { includeMeas = false; }
       if( (estim->getY() - meas.getY()) > resY.second){ includeMeas = false; }
-      if( includeMeas and meas.goodRegion() ){
+      if( includeMeas){
+	  //meas.goodRegion() ){
 	nHits++;
 	//std::cout << "GotHit!" << nHits << std::endl;
 	track->weights.at(ii)(w) = 1.0;
@@ -227,6 +228,7 @@ void EUTelDafMaterial::dafEvent (LCEvent * event) {
 	  Measurement<float> m = _system.planes.at(plane).meas.at(hitIndex);
 	  //if(m.goodRegion()){ track.push_back( Measurement<float>(m.getX(), m.getY(), _system.planes.at(plane).getMeasZ(), true, plane)); }
 	  if(m.goodRegion()){ track.push_back( m ); }
+	  //track.push_back( m );
 	}
 	if(plane ==  _system.planes.size()/2){
 	  _angleX += _system.tracks.at(ii)->estimates.at(plane)->getXdz();
@@ -259,7 +261,8 @@ void EUTelDafMaterial::dafEnd() {
   for( size_t ii = 0; ii< _system.planes.size(); ii++){
     _system.planes.at(ii).include();
     FitPlane<float>& plane = _system.planes.at(ii);
-    _matest.system.addPlane(ii,ii, plane.getSigmaX(), plane.getSigmaY(), plane.getScatterThetaSqr(), plane.isExcluded() );
+    _matest.system.addPlane(_system.planes.at(ii).getSensorID(),_system.planes.at(ii).getZpos(), 
+			    plane.getSigmaX(), plane.getSigmaY(), plane.getScatterThetaSqr(), plane.isExcluded() );
   }
 
   //These tracks have already been found, use very wide cuts.
@@ -281,7 +284,7 @@ void EUTelDafMaterial::dafEnd() {
   for(size_t ii = 0; ii < _system.planes.size(); ii++){ _matest.zPos.at(ii) = _system.planes.at(ii).getZpos(); }
 
   for(size_t ii = 0; ii < _zPos.size(); ii++){ 
-    cout << "pl " << ii << " ZPos = " << _zPos.at(ii) << endl;;
+    cout << "pl " << ii << " ZPos = " << _zPos.at(ii) << endl;
     _matest.zPos.at(ii) = _zPos.at(ii); 
     _matest.movePlaneZ(ii, _zPos.at(ii));
   }
@@ -316,8 +319,8 @@ void EUTelDafMaterial::dafEnd() {
   //Minimizer* minimize = new FakeAbsDev(_matest);
   _matest.simplexSearch(minimize, 3000, 30);
   
-  // FwBw* minimize = new FwBw(_matest); //FWBW
-  // _matest.quasiNewtonHomeMade(minimize, 40);
+  //FwBw* minimize = new FwBw(_matest); //HYBR
+  //_matest.quasiNewtonHomeMade(minimize, 40);
 
 
   //Use this for alignment only. 

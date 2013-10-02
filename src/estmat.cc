@@ -559,6 +559,17 @@ void EstMat::printAllFreeParams(){
   printParams( (char*) "params[\"ZPosition\"]", zPos, zPosIndex.size(), "%4.2f ");
 }
 
+void printHisto(TH1D* histo){
+  cout << "(list" 
+       <<  " :min " << histo->GetXaxis()->GetXmin()
+       << " :bin-size " << histo->GetBinWidth( 0 ) << endl
+       << " :data (list" << endl;
+  for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
+    cout << " " << histo->GetBinContent( ii );
+  }
+  cout << endl << "))" << endl;
+}
+
 void EstMat::printParams(char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString){
   //Print estimation parameters to screen
   if(not plot){ return;}
@@ -579,7 +590,8 @@ void EstMat::plot(char* fname){
   TFile* tfile = new TFile(fname, "RECREATE");
   std::vector<TH1D*> resX, resY, pullX, pullY;
   std::vector<TH1D*> xFB, yFB, dxFB, dyFB, pValFW;
-  TH1D* chi2 = new TH1D("chi2","chi2", 150, 0, 150);
+  //TH1D* chi2 = new TH1D("chi2","chi2", 150, 0, 150);
+  TH1D* chi2 = new TH1D("chi2","chi2", 100, 0, 100);
   TH1D* ndof = new TH1D("ndof", "ndof", 15, 0, 15);
   TH1D* pValue = new TH1D("pValue", "pValue", 100,0,1);
   TH1D* chi2OverNeod = new TH1D("chi2ndof","chi2 over ndof", 100, 0, 20);
@@ -591,9 +603,11 @@ void EstMat::plot(char* fname){
     sprintf(name, "resY %i", sensorID); 
     resY.push_back( new TH1D(name,name, 800, -400, 400));
     sprintf(name, "pullX unbiased  %i", sensorID); 
-    pullX.push_back( new TH1D(name,name, 100, -10, 10));
+    //pullX.push_back( new TH1D(name,name, 100, -10, 10));
+    pullX.push_back( new TH1D(name,name, 600, -30, 30));
     sprintf(name, "pullY biased  %i", sensorID); 
-    pullY.push_back( new TH1D(name,name, 100, -10, 10));
+    //pullY.push_back( new TH1D(name,name, 100, -10, 10));
+    pullY.push_back( new TH1D(name,name, 600, -30, 30));
   }
   
   cout << "Inited plots" << endl;
@@ -641,10 +655,37 @@ void EstMat::plot(char* fname){
     pullX.at(ii)->Write();
     pullY.at(ii)->Write();
   }
+
+
+  std::cout << "(defparameter *DUMMY*" << endl;
+  std::cout << "(list" << std::endl;
+  std::cout << ":chi2 ";
+  printHisto(chi2);
+  std::cout << ":p-val ";
+  printHisto(pValue);
+  for(size_t ii = 0; ii < system.planes.size(); ii++){
+    std::cout << ":histo" << ii << " ";
+    printHisto(pullX.at(ii));
+  }
+  //Pull means
+  std::cout << ":means (list";
+  for(int ii = 0; ii < pullX.size(); ii++){
+    cout << " " << pullX.at(ii)->GetMean();
+  }
+  cout << endl << ")" << endl;
+  //Pull sigmas
+  std::cout << ":sigmas (list";
+  for(int ii = 0; ii < pullX.size(); ii++){
+    cout << " " << pullX.at(ii)->GetRMS();
+  }
+  cout << endl << ")" << endl;
+  std::cout << "))" << std::endl; //closes list and defparameter
+
   cout << "Write" << endl;
   tfile->Write();
   cout << "Done plotting to " << fname << endl;
 }
+
 
 //simplex stuff
 size_t EstMat::getNSimplexParams(){
@@ -837,6 +878,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
   }
 
   for(int ii = 0; ii < restarts; ii++){
+    cout << "iteration " << ii << endl;
     const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
     gsl_multimin_fminimizer *s = NULL;
     gsl_vector *ss, *x;

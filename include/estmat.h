@@ -15,17 +15,16 @@
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
 
-#include "EUTelDafTrackerSystem.h"
-#include "simutils.h"
-
-#include <gsl/gsl_vector_double.h>
-
 #if DOTHREAD
 #include <boost/thread.hpp>
 #include <boost/thread/detail/thread_group.hpp>
 #include <boost/bind.hpp>
 #endif
 
+#include "EUTelDafTrackerSystem.h"
+#include "simutils.h"
+
+#include <gsl/gsl_vector_double.h>
 
 using namespace daffitter;
 //typedef double FITTERTYPE;

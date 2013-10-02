@@ -70,7 +70,7 @@ inline void FitPlane<T>::print(){
 template <typename T, size_t N>
 TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0), m_nXdzdeviance(0.01),m_nYdzdeviance(0.01) {
   //Constructor for the system of detector planes.
-  ;
+  //m_chi2vals.resize(100,0);
 }
 
 template <typename T, size_t N>
@@ -80,7 +80,8 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
 								    m_nXdzdeviance(sys.m_nXdzdeviance), m_nYdzdeviance(sys.m_nYdzdeviance),
 								    m_dafChi2(sys.m_dafChi2), m_ckfChi2(sys.m_ckfChi2), 
 								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius){
-  cout << "Cloning tracker system:" << endl;
+  //m_chi2vals.resize(100,0);
+  //cout << "Cloning tracker system:" << endl;
   for(size_t ii = 0; ii < sys.planes.size(); ii++){
     const FitPlane<T>& pl = sys.planes.at(ii);
     this->addPlane(pl.getSensorID(), pl.getZpos(), pl.getSigmaX(), pl.getSigmaY(), pl.getScatterThetaSqr(), pl.isExcluded());
@@ -224,7 +225,6 @@ void TrackerSystem<T, N>::clusterTracker(){
   }
   //Sort by radius from origin
   //availableHits.sort(clusterSort<T>);
-
   while( not availableHits.empty() ){
     vector<PlaneHit<T> > candidate;
     candidate.push_back( availableHits.front() );
@@ -484,16 +484,17 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
       resv = getResiduals( m, estim ).cwise().square();
       errv = getUnBiasedResidualErrors( planes.at(ii), estim);
       chi2 += weight * (resv.cwise() / errv).sum();
-      if(isnan(chi2)){
-	cout << "plane " << ii << endl;
-	cout << "chi2 " << chi2 << endl;
-	cout << "Incement " << (resv.cwise() / errv).sum() << endl;
-	cout << "Weight: " << weight << endl;
-	cout << "resv" << endl << resv << endl;
-	cout << "errv" << endl << errv << endl;
-	cout << "params" << endl << estim->params << endl;
-	break;
-      }
+      // if(isnan(chi2)){
+      // 	estim->print();
+      // 	cout << "plane " << ii << endl;
+      // 	//cout << "chi2 " << chi2 << endl;
+      // 	//cout << "Incement " << (resv.cwise() / errv).sum() << endl;
+      // 	cout << "Weight: " << weight << endl;
+      // 	//cout << "resv" << endl << resv << endl;
+      // 	//cout << "errv" << endl << errv << endl;
+      // 	cout << "params" << endl << estim->params << endl;
+      // 	break;
+      // }
     }
   }
   delete estim;
@@ -560,18 +561,16 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
   }
   //cout << "First fit!" << endl;
   fitPlanesInfoDafInner();
-  if(isnan(ndof)) { ndof = 0.0; }
+  if(isnan(ndof)) { ndof = -10.0; }
   // Temperatures should be given from top level. This should be fixed.
-  //if(ndof > 0.0f) { ndof = runTweight(15.0); }
-  //if(ndof > 0.0f) { ndof = runTweight(10.0); }
-  //if(ndof > 0.5f) { ndof = runTweight(7.0);}// else {  cout <<"killed by 1" << endl;}
-  //if(ndof > 0.5f) { ndof = runTweight(7.0); }// else {  cout <<"killed by 2" << endl;}
-  if(ndof > 1.0f) { ndof = runTweight(3.0); }// else {  cout <<"killed by 3" << endl;}
-  if(ndof > 1.0f) { ndof = runTweight(1.5); }// else {  cout <<"killed by 4" << endl;}
-  if(ndof > 1.0f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 5" << endl;}
-  //if(ndof > 0.0f) { ndof = runTweight(0.1); }
-  // if(ndof > 0.0f) { ndof = runTweight(.1); }
-  //if(ndof > 0.0f) { ndof = runTweight(.1); }
+  // if(ndof > -1.9f) { ndof = runTweight(7.0);}// else {  cout <<"killed by 1" << endl;}
+  // if(ndof > -1.9f) { ndof = runTweight(7.0); }// else {  cout <<"killed by 1, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(3.0); }// else {  cout <<"killed by 2, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.5); }// else {  cout <<"killed by 3, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  // if(ndof > -1.9f) { ndof = runTweight(0.5); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
+  // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
+  // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 6, " << ndof << endl; return;}
   
   if(ndof > 1.0f) {
     for(int ii = 0; ii <(int)  planes.size() ; ii++ ){
@@ -851,10 +850,11 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     finalizeCKFTrack(est, indexes);
     return;
   }
-  //Unless first plane, get prediction at plane
-  if( plane > 0 ){
+  //Unless first measurement plane, get prediction at plane
+  if( nMeas > 0 ){
+    if(nMeas > 1) m_fitter->addScatteringInfo( planes.at(plane - 1), est);
+    //Propagate
     m_fitter->predictInfo(planes.at( plane - 1), planes.at(plane), est);
-    m_fitter->addScatteringInfo( planes.at(plane), est);
   }
   //Excluded plane, propagate without looking for measurement
   if( planes.at(plane).isExcluded()){
@@ -863,7 +863,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     fitPermutation(plane + 1, est, nSkipped, indexes, nMeas);
     return;
   }
-
   //Prepare for branch generation
   size_t tmpNtracks = getNtracks();
   Matrix<T,2,1> resv, errv;
@@ -875,7 +874,9 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     Matrix<T, N, N> tmp4x4 = est->cov;
     fastInvert(tmp4x4);
     state = tmp4x4 * est->params;
-    errv = planes.at(plane).getSigmas().cwise() .square() + tmp4x4.diagonal().start(2);
+    // cout << "nMeas " << nMeas << endl <<  "cov: " << tmp4x4.diagonal().start(2) << endl;
+    // cout << "sigmasq " << planes.at(plane).getSigmas().cwise().square() << endl;
+    errv = planes.at(plane).getSigmas().cwise().square() + tmp4x4.diagonal().start(2);
   }
   //If only one measurement has been read in. prepare for checking angles
   if(nMeas == 1){
@@ -896,8 +897,10 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     if( nMeas > 1) { 
       //If more than 1 measurements, get chi2
       resv = (state.start(2) - mm.getM()).cwise().square();
-      chi2 = (resv.cwise() / errv).sum();	
-      if (chi2 <  getCKFChi2Cut() ) { filterMeas = true;}
+      chi2 = (resv.cwise() / errv).sum();
+      if (chi2 <  getCKFChi2Cut() ) { 
+	filterMeas = true;
+      }
     } else if(nMeas == 1){ 
       //Check angle of second plane
       double newZ = planes.at(plane).getZpos();
@@ -911,7 +914,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     if ( filterMeas ){ 
       TrackEstimate<T, N>* clone = new TrackEstimate<T, N>(); clone->copy(est);
       m_fitter->updateInfo(planes.at(plane), hit, clone);
-      m_fitter->addScatteringInfo( planes.at(plane), clone);
       indexes.at(plane)= hit;
       fitPermutation(plane + 1, clone, nSkipped, indexes, nMeas + 1);
       delete clone;
