@@ -49,9 +49,10 @@ void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,
     //chi2s = chi2s.cwise() / resids;
     T chi2 = chi2s.sum();
     plane.weights(m) = exp( -1 * chi2 / (2 * tval));
+    //if(isnan(plane.weights(m))){exit(1);}
   }
   T cutWeight = exp( -1 * chi2cutoff / (2 * tval));
-  plane.weights /= (cutWeight + plane.weights.sum() + DBL_MIN);
+  plane.weights /= (cutWeight + plane.weights.sum() + FLT_MIN);
   plane.setTotWeight( plane.weights.sum() );
 }
 
