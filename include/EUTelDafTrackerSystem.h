@@ -252,10 +252,6 @@ namespace daffitter{
     T runTweight(T t);
     T fitPlanesInfoDafInner();
     T fitPlanesInfoDafBiased();
-    T getNominalXdz() const { return(m_nXdz); }
-    T getNominalYdz() const { return(m_nYdz); }
-    T getXdzMaxDeviance() const { return(m_nXdzdeviance); }
-    T getYdzMaxDeviance() const { return(m_nYdzdeviance); }
     size_t getMinClusterSize() const { return(m_minClusterSize); }
     void checkNan(TrackEstimate<T,N>* e);
     //CKF
@@ -263,6 +259,8 @@ namespace daffitter{
     void fitPermutation(int plane, TrackEstimate<T,N> *est, int nSkipped, std::vector<int> &indexes, int nMeas);
     
   public: 
+    //std::vector<int> m_chi2vals;
+
     EigenFitter<T,N>* m_fitter;
     std::vector<daffitter::FitPlane<T> > planes;
     std::vector<daffitter::TrackCandidate<T,N>*> tracks;
@@ -297,6 +295,11 @@ namespace daffitter{
     void setMinClusterSize( size_t n) { m_minClusterSize = n; }
     void intersect();
 
+    T getNominalXdz() const { return(m_nXdz); }
+    T getNominalYdz() const { return(m_nYdz); }
+    T getXdzMaxDeviance() const { return(m_nXdzdeviance); }
+    T getYdzMaxDeviance() const { return(m_nYdzdeviance); }
+
     //Track finders
     void clusterTracker();
     void truthTracker();
@@ -328,7 +331,7 @@ namespace daffitter{
   inline void partialFastInvert(Matrix<T, 4, 4> &cov, size_t p1, size_t p2){
     // Matrix is sparce, if state vector was [x,dx/dz, y,dy/dz] it would be block diagonal
     //Invert as if it was
-    
+
     //Invert block
     T a(cov(p1,p1)), d(cov(p2,p2)), b(cov(p1,p2));
     T det = 1.0f / (a * d - b * b);
