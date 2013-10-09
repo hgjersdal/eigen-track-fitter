@@ -484,17 +484,6 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
       resv = getResiduals( m, estim ).cwise().square();
       errv = getUnBiasedResidualErrors( planes.at(ii), estim);
       chi2 += weight * (resv.cwise() / errv).sum();
-      // if(isnan(chi2)){
-      // 	estim->print();
-      // 	cout << "plane " << ii << endl;
-      // 	//cout << "chi2 " << chi2 << endl;
-      // 	//cout << "Incement " << (resv.cwise() / errv).sum() << endl;
-      // 	cout << "Weight: " << weight << endl;
-      // 	//cout << "resv" << endl << resv << endl;
-      // 	//cout << "errv" << endl << errv << endl;
-      // 	cout << "params" << endl << estim->params << endl;
-      // 	break;
-      // }
     }
   }
   delete estim;
@@ -568,11 +557,14 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
   if(ndof > -1.9f) { ndof = runTweight(3.0); }// else {  cout <<"killed by 2, " << ndof << endl; return;}
   if(ndof > -1.9f) { ndof = runTweight(1.5); }// else {  cout <<"killed by 3, " << ndof << endl; return;}
   if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.5); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 6, " << ndof << endl; return;}
   
-  if(ndof > 1.0f) {
+  if(ndof > -1.9f) {
     for(int ii = 0; ii <(int)  planes.size() ; ii++ ){
       //Store estimates and weights in candidate
       candidate->estimates.at(ii)->copy( m_fitter->smoothed.at(ii) );
@@ -625,8 +617,8 @@ T TrackerSystem<T, N>::fitPlanesInfoDafInner(){
     m_fitter->updateInfoDaf( planes.at(ii), e );
     m_fitter->addScatteringInfo( planes.at(ii), e);
   }
-  //No reason to complete unless 3 measurements are in
-  if(ndof < .5) { delete e; return(ndof);}
+  //No reason to complete unless >1 measurements are in
+  if(ndof < -2.1) { delete e; return(ndof);}
   
   //Backward fitter, never bias
   e->makeSeedInfo(true);
@@ -663,8 +655,8 @@ T TrackerSystem<T, N>::fitPlanesInfoDafBiased(){
     m_fitter->updateInfoDaf( planes.at(ii), e );
     m_fitter->forward.at(ii)->copy(e);
   }
-  //No reason to complete
-  if(ndof < 2.5) { return(ndof);}
+  //No reason to complete if less than one measurement is in
+  if(ndof < -2.1) { return(ndof);}
   
   //Backward fitter, never bias
   e->makeSeedInfo(true);
@@ -820,6 +812,12 @@ void TrackerSystem<T, N>::combinatorialKF(){
 
 template <typename T,size_t N>
 void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>& indexes){
+  fastInvert(est->cov);
+  est->params = est->cov * est->params;
+  if(( fabs( est->getXdz() - getNominalXdz()) > getXdzMaxDeviance() ) or
+     ( fabs( est->getYdz() - getNominalYdz()) > getYdzMaxDeviance())){
+    return;
+  }
   // Either reject the track, or save it
   TrackCandidate<T, N> *candidate = tracks.at( getNtracks() );
   candidate->ndof = 0;
