@@ -15,7 +15,7 @@ boost::mutex randGuard;
 #include "simutils.h"
 
 #define DAF
-//#define HISTOS
+#define HISTOS
 
 /*
 Simnple application og the straight line track fitter
@@ -91,7 +91,7 @@ public:
       pull_dx.at(index)++;
     }
   }
-  void fill(double chi2, double weight, bool real){
+  void fill(double chi2, double weight, bool real, TrackCandidate<float,4>* cnd, int plane){
     if(chi2 < 27.5){
       if(real){
 	chi2Real.at(floor(chi2 * 4)) += 1.0;
@@ -99,6 +99,10 @@ public:
 	chi2Fake.at(floor(chi2 * 4)) += 1.0;
       } 
       histo.at( floor(chi2 * 4)).at(floor(weight * 100)) += 1.0;
+    }
+    if((chi2 < 5) and (weight < 0.05)){
+      cout << "chi2: " << chi2 << endl;
+      cout << "Weights: " << endl  << cnd->weights.at(plane) << endl;
     }
   }
   void print(int plane){
@@ -171,7 +175,7 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
     //Fit track with DAF. Also calculates DAF approximation of chi2 and ndof
 
 #ifdef DAF
-    //system.indexToWeight( track );
+    system.indexToWeight( track ); //REMEMBER ME
     system.fitPlanesInfoDaf( track );
     system.weightToIndex( track );
 #else
@@ -179,10 +183,8 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
     system.indexToWeight( track );
 #endif
     //Extract the index for the minimum chi2/ndof track
-    if( ((track->chi2 / track->ndof) < chi2ndof) and
-     	(track->ndof > 1.5)){ //and
-	// ( fabs( track->estimates.at(0)->getXdz() - system.getNominalXdz()) < system.getXdzMaxDeviance() ) and
-	// ( fabs( track->estimates.at(0)->getYdz() - system.getNominalYdz()) < system.getYdzMaxDeviance())) {
+    if( ((track->chi2 / track->ndof) < chi2ndof) ){
+        //(track->ndof > 1.5)){ //and
       chi2ndof = track->chi2 / track->ndof;
       myTrack = ii;
     }
@@ -257,12 +259,12 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
 	  residuals = system.getResiduals(system.planes.at(pl).meas.at(meas), track->estimates.at(pl));
 	  reserror = system.getUnBiasedResidualErrors(system.planes.at(pl), track->estimates.at(pl));
 	  
-	  double chi2 = residuals(0) * residuals(0)/reserror(0) + residuals(1) * residuals(1)/reserror(1);
+	  double chi2M = residuals(0) * residuals(0)/reserror(0) + residuals(1) * residuals(1)/reserror(1);
 	  
 	  bool real = system.planes.at(pl).meas.at(meas).goodRegion();
 
 #ifdef HISTOS
-	  histos.at(pl).fill(chi2, weight, real);
+	  histos.at(pl).fill(chi2M, track->weights.at(pl)(meas), real, track, pl);
 #endif
 	  //Count the total weight
 	  valueMap[totWeight] += weight;
@@ -366,8 +368,10 @@ int main(){
   system.setChi2OverNdofCut( 6.0f); //Chi2 / ndof cut for the combinatorial KF to accept the track
   system.setNominalXdz(0.0f); //Nominal beam angle
   system.setNominalYdz(0.0f); //Nominal beam angle
-  system.setXdzMaxDeviance(0.0007f);//How far og the nominal angle can the first two measurements be?
-  system.setYdzMaxDeviance(0.0007f);//How far og the nominal angle can the first two measurements be?
+  system.setXdzMaxDeviance(0.0005f);//How far og the nominal angle can the first two measurements be?
+  system.setYdzMaxDeviance(0.0005f);//How far og the nominal angle can the first two measurements be?
+  // system.setXdzMaxDeviance(0.0003f);//How far og the nominal angle can the first two measurements be?
+  // system.setYdzMaxDeviance(0.0003f);//How far og the nominal angle can the first two measurements be?
   
   //Add planes to the tracker system
   float scattertheta = getScatterSigma(ebeam,.1);  
@@ -397,18 +401,19 @@ int main(){
   float ckfcut = 15.0;
   char hashname[200];
   
-  for(int chi2cut = 8; chi2cut < 30 ; chi2cut += 2){
-  //for(int ckfcut = 2; ckfcut < 30 ; ckfcut += 2){
-  //for(int radius = 10; radius < 150; radius += 5){
-  //{
+  //for(int chi2cut = 8; chi2cut < 30 ; chi2cut += 2){
+  //for(int ckfcut = 20; ckfcut < 21 ; ckfcut += 2){
+  //for(int radius = 100; radius < 104; radius += 5){
+  {
     sprintf(hashname,"*noisehash-%d-%d*", int(chi2cut), int(ckfcut));
+    //sprintf(hashname,"*noisehash-hardangle-%d-%d*", int(chi2cut), int(ckfcut));
     //sprintf(hashname,"*noisehash-rad-%d*", radius);
     cout << "(defparameter " << hashname <<" (make-hash-table :test #\'equalp))" << endl;
     system.setCKFChi2Cut(ckfcut); //Cut on the chi2 increment for the inclusion of a new measurement for combinatorial KF 
     system.setDAFChi2Cut( chi2cut); // DAF chi2 cut-off
     //system.setClusterRadius(radius);
     
-    for(int noise = 0; noise < 21; noise ++){  
+    for(int noise = 10; noise < 11; noise ++){  
       
       valueMap[totWeight] = 0.0f;
       valueMap[noiseWeight] = 0.0f;
