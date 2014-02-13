@@ -185,12 +185,11 @@ int EUTelDafAlign::checkDutResids(daffitter::TrackCandidate<float, 4> * track){
 	nHits++; 
 	if( not meas.goodRegion() ){  measWeight = 0.0f;  }
       }
-      plane.weights(w) = measWeight;
+      track->weights.at(ii)(w) = measWeight;
       if( measWeight > 0.5 ){
 	_dutMatches.push_back(ii);
       }
     }
-    track->weights.at(ii) = plane.weights;
   }
   return(nHits);
 }

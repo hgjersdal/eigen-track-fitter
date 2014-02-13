@@ -209,7 +209,7 @@ void EUTelDafFitter::addToLCIO(daffitter::TrackCandidate<float, 4>* track){
     }
     //Also add measurement point
     for(size_t mm = 0; mm < pl.meas.size(); mm++){
-      if( pl.weights(mm) < 0.5f){ continue; }
+      if( track->weights.at(plane)(mm) < 0.5f){ continue; }
       if( pl.isExcluded()) { continue; }
       TrackerHitImpl* meashit = static_cast<TrackerHitImpl*> ( _hitCollection->getElementAt( pl.meas.at(mm).getIden()) );
       fittrack->addHit(meashit);

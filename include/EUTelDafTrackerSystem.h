@@ -130,7 +130,7 @@ namespace daffitter{
     //Measurements in plane
     std::vector< Measurement<T> > meas;
     //Daf weights of measurements
-    Matrix<T, Eigen::Dynamic, 1> weights;
+    //Matrix<T, Eigen::Dynamic, 1> weights;
     Matrix<T, 2, 1> invMeasVar;
     FitPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatterVariance, bool excluded);
     int getSensorID()  const {return(this->sensorID); }
@@ -218,14 +218,14 @@ namespace daffitter{
     //daf weights
     void setT(T tval) {this->tval = tval;};
     T getT() { return(this->tval); };
-    void calculateWeights(std::vector<FitPlane<T> > &pl, T chi2cut);
-    void calculatePlaneWeight(FitPlane<T>  &pl, TrackEstimate<T,N> *e, T chi2cutoff);
+    void calculateWeights(std::vector<FitPlane<T> > &pl, T chi2cut, std::vector< Matrix<T, Eigen::Dynamic, 1> > &weights);
+    void calculatePlaneWeight(FitPlane<T>  &pl, TrackEstimate<T,N> *e, T chi2cutoff, Matrix<T, Eigen::Dynamic, 1> &weights);
 
     //Information filter
     void predictInfo(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N>* e);
     void addScatteringInfo(const FitPlane<T> & pl, TrackEstimate<T,N>* e);
     void updateInfo(const FitPlane<T>  &pl, const int index, TrackEstimate<T,N>* e);
-    void updateInfoDaf(const FitPlane<T>  &pl, TrackEstimate<T,N>* e);
+    void updateInfoDaf(const FitPlane<T>  &pl, TrackEstimate<T,N>* e, Matrix<T, Eigen::Dynamic, 1> &weights);
     void getAvgInfo(TrackEstimate<T,N>* e1, TrackEstimate<T,N>* e2, TrackEstimate<T,N>* result);
     void smoothInfo();
     //Standard formulation
@@ -247,11 +247,12 @@ namespace daffitter{
 
     T m_nXdz, m_nYdz, m_nXdzdeviance, m_nYdzdeviance;
     T m_dafChi2, m_ckfChi2, m_chi2OverNdof, m_sqrClusterRadius;
+    size_t m_skipMax;
     
     int addNeighbors(std::vector<PlaneHit<T> > &candidate, std::list<PlaneHit<T> > &hits);
-    T runTweight(T t);
-    T fitPlanesInfoDafInner();
-    T fitPlanesInfoDafBiased();
+    T runTweight(T t, daffitter::TrackCandidate<T,N>* candidate);
+    T fitPlanesInfoDafInner(daffitter::TrackCandidate<T,N>* candidate);
+    T fitPlanesInfoDafBiased(daffitter::TrackCandidate<T,N>* candidate);
     size_t getMinClusterSize() const { return(m_minClusterSize); }
     void checkNan(TrackEstimate<T,N>* e);
     //CKF
@@ -294,6 +295,7 @@ namespace daffitter{
     void setYdzMaxDeviance(T ydz) { m_nYdzdeviance = ydz; }
     void setMinClusterSize( size_t n) { m_minClusterSize = n; }
     void intersect();
+    void setMaxSkippedHits(size_t n) { m_skipMax; }
 
     T getNominalXdz() const { return(m_nXdz); }
     T getNominalYdz() const { return(m_nYdz); }

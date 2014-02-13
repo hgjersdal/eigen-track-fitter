@@ -68,7 +68,7 @@ inline void FitPlane<T>::print(){
 
 
 template <typename T, size_t N>
-TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0), m_nXdzdeviance(0.01),m_nYdzdeviance(0.01) {
+TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0), m_nXdzdeviance(0.01),m_nYdzdeviance(0.01), m_skipMax(2) {
   //Constructor for the system of detector planes.
   //m_chi2vals.resize(100,0);
 }
@@ -79,7 +79,8 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
 								    m_nXdz(sys.m_nXdz), m_nYdz(sys.m_nYdz),
 								    m_nXdzdeviance(sys.m_nXdzdeviance), m_nYdzdeviance(sys.m_nYdzdeviance),
 								    m_dafChi2(sys.m_dafChi2), m_ckfChi2(sys.m_ckfChi2), 
-								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius){
+								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius),
+								    m_skipMax(sys.m_skipMax){
   //m_chi2vals.resize(100,0);
   //cout << "Cloning tracker system:" << endl;
   for(size_t ii = 0; ii < sys.planes.size(); ii++){
@@ -470,7 +471,7 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
   for(size_t ii = 0; ii < planes.size(); ii++){
     if(planes.at(ii).isExcluded()) { continue;}
     //Chi2 increment of first is 0 and non invertible
-    double newWeight = planes.at(ii).weights.sum();
+    double newWeight = candidate->weights.at(ii).sum();
     sumWeight += newWeight;
     if(newWeight < 0.05) { continue; }
     if(ndof < 1.5){ ndof += 1.0; continue;}
@@ -480,7 +481,7 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
     estim->params = estim->cov * estim->params;
     for(size_t mm = 0; mm < planes.at(ii).meas.size(); mm++){
       Measurement<T> & m = planes.at(ii).meas.at(mm);
-      T weight = planes.at(ii).weights(mm);
+      T weight = candidate->weights.at(ii)(mm);
       resv = getResiduals( m, estim ).cwise().square();
       errv = getUnBiasedResidualErrors( planes.at(ii), estim);
       chi2 += weight * (resv.cwise() / errv).sum();
@@ -520,11 +521,11 @@ void TrackerSystem<T, N>::intersect(){
 }
 
 template <typename T,size_t N>
-T TrackerSystem<T, N>::runTweight(T t){
+T TrackerSystem<T, N>::runTweight(T t, TrackCandidate<T, N> *candidate){
   //A DAF iteration with temperature t.
   m_fitter->setT(t);
-  m_fitter->calculateWeights(planes, getDAFChi2Cut());
-  T ndof = fitPlanesInfoDafInner();
+  m_fitter->calculateWeights(planes, getDAFChi2Cut(), candidate->weights);
+  T ndof = fitPlanesInfoDafInner(candidate);
   intersect();
   return( ndof );
 }
@@ -534,32 +535,30 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
   // Get smoothed estimates for all planes using the unbiased DAF
   T ndof = -4.0f;
   for(int plane = 0; plane < (int) planes.size(); plane++ ){
-    //Copy weights from candidate, get tot weight per plane
-    planes.at(plane).weights.resize( candidate->weights.at(plane).size() );
-    planes.at(plane).weights = candidate->weights.at(plane);
-    if ( planes.at(plane).weights.size() > 0 ){
-      planes.at(plane).setTotWeight( planes.at(plane).weights.sum() );
+    //set tot weight per plane
+    if ( candidate->weights.at(plane).size() > 0 ){
+      planes.at(plane).setTotWeight( candidate->weights.at(plane).sum() );
     } else {
       planes.at(plane).setTotWeight( 0.0f );
     }
     if( planes.at(plane).getTotWeight() > 1.0f){
-      planes.at(plane).weights *= 1.0f / planes.at(plane).getTotWeight();
+      candidate->weights.at(plane) *= 1.0f / planes.at(plane).getTotWeight();
       planes.at(plane).setTotWeight( 1.0f );
     }
     ndof += planes.at(plane).getTotWeight() * 2.0;
   }
   //cout << "First fit!" << endl;
-  fitPlanesInfoDafInner();
+  fitPlanesInfoDafInner(candidate);
   if(isnan(ndof)) { ndof = -10.0; }
   // Temperatures should be given from top level. This should be fixed.
   // if(ndof > -1.9f) { ndof = runTweight(7.0);}// else {  cout <<"killed by 1" << endl;}
   // if(ndof > -1.9f) { ndof = runTweight(7.0); }// else {  cout <<"killed by 1, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(3.0); }// else {  cout <<"killed by 2, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.5); }// else {  cout <<"killed by 3, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(3.0, candidate); }// else {  cout <<"killed by 2, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.5, candidate); }// else {  cout <<"killed by 3, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.5); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
   // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 6, " << ndof << endl; return;}
@@ -568,7 +567,6 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
     for(int ii = 0; ii <(int)  planes.size() ; ii++ ){
       //Store estimates and weights in candidate
       candidate->estimates.at(ii)->copy( m_fitter->smoothed.at(ii) );
-      candidate->weights.at(ii) = planes.at(ii).weights;
     }
     //fitPlanesInfoDafBiased();
     getChi2UnBiasedInfoDaf(candidate);
@@ -598,14 +596,14 @@ void TrackerSystem<T, N>::checkNan(TrackEstimate<T, N>* e){
 }
 
 template <typename T,size_t N>
-T TrackerSystem<T, N>::fitPlanesInfoDafInner(){
+T TrackerSystem<T, N>::fitPlanesInfoDafInner(TrackCandidate<T, N> *candidate){
   // Get smoothed estimates for all planes using the weighted information filter
   size_t nPlanes = planes.size();
   TrackEstimate<T, N>* e = new TrackEstimate<T, N>();
   e->makeSeedInfo(true);
   //Forward fitter
   m_fitter->forward.at(0)->copy(e);
-  m_fitter->updateInfoDaf( planes.at(0), e );
+  m_fitter->updateInfoDaf( planes.at(0), e, candidate->weights.at(0));
   T ndof( -1.0f * e->params.size());
   ndof += 2 * planes.at(0).getTotWeight();
   for(size_t ii = 1; ii < nPlanes ; ii++ ){
@@ -614,7 +612,7 @@ T TrackerSystem<T, N>::fitPlanesInfoDafInner(){
     }
     m_fitter->predictInfo( planes.at( ii - 1), planes.at(ii), e );
     m_fitter->forward.at(ii)->copy(e);
-    m_fitter->updateInfoDaf( planes.at(ii), e );
+    m_fitter->updateInfoDaf( planes.at(ii), e, candidate->weights.at(ii) );
     m_fitter->addScatteringInfo( planes.at(ii), e);
   }
   //No reason to complete unless >1 measurements are in
@@ -623,12 +621,12 @@ T TrackerSystem<T, N>::fitPlanesInfoDafInner(){
   //Backward fitter, never bias
   e->makeSeedInfo(true);
   m_fitter->backward.at( nPlanes -1 )->copy(e);
-  m_fitter->updateInfoDaf( planes.at(nPlanes -1 ), e );
+  m_fitter->updateInfoDaf( planes.at(nPlanes -1 ), e, candidate->weights.at(nPlanes - 1) );
   for(int ii = nPlanes -2; ii >= 0; ii-- ){
     m_fitter->predictInfo( planes.at( ii + 1 ), planes.at(ii), e );
     m_fitter->addScatteringInfo( planes.at(ii), e);
     m_fitter->backward.at(ii)->copy(e);
-    m_fitter->updateInfoDaf( planes.at(ii), e );
+    m_fitter->updateInfoDaf( planes.at(ii), e, candidate->weights.at(ii) );
   }
   delete e;
 
@@ -637,14 +635,14 @@ T TrackerSystem<T, N>::fitPlanesInfoDafInner(){
 }
 
 template <typename T,size_t N>
-T TrackerSystem<T, N>::fitPlanesInfoDafBiased(){
+T TrackerSystem<T, N>::fitPlanesInfoDafBiased(TrackCandidate<T, N> *candidate){
   // Get smoothed estimates for all planes using the biased DAF
 
   size_t nPlanes = planes.size();
   TrackEstimate<T, N>* e = new TrackEstimate<T, N>();
   e->makeSeedInfo(true);
   //Forward fitter
-  m_fitter->updateInfoDaf( planes.at(0), e );
+  m_fitter->updateInfoDaf( planes.at(0), e, candidate->weights.at(0));
   m_fitter->forward.at(0)->copy(e);
   T ndof( -1.0f * e->params.size());
   ndof += 2 * planes.at(0).getTotWeight();
@@ -652,7 +650,7 @@ T TrackerSystem<T, N>::fitPlanesInfoDafBiased(){
     ndof += 2 * planes.at(ii).getTotWeight();
     m_fitter->predictInfo( planes.at( ii - 1), planes.at(ii), e );
     m_fitter->addScatteringInfo( planes.at(ii), e);
-    m_fitter->updateInfoDaf( planes.at(ii), e );
+    m_fitter->updateInfoDaf( planes.at(ii), e, candidate->weights.at(ii));
     m_fitter->forward.at(ii)->copy(e);
   }
   //No reason to complete if less than one measurement is in
@@ -661,11 +659,11 @@ T TrackerSystem<T, N>::fitPlanesInfoDafBiased(){
   //Backward fitter, never bias
   e->makeSeedInfo(true);
   m_fitter->backward.at( nPlanes -1 )->copy(e);
-  m_fitter->updateInfoDaf( planes.at(nPlanes -1 ), e );
+  m_fitter->updateInfoDaf( planes.at(nPlanes -1 ), e, candidate->weights.at(nPlanes -1));
   for(int ii = nPlanes -2; ii >= 0; ii-- ){
     m_fitter->predictInfo( planes.at( ii + 1 ), planes.at(ii), e );
     m_fitter->backward.at(ii)->copy(e);
-    m_fitter->updateInfoDaf( planes.at(ii), e );
+    m_fitter->updateInfoDaf( planes.at(ii), e, candidate->weights.at(ii));
     m_fitter->addScatteringInfo( planes.at(ii), e);
   }
   delete e;
@@ -720,11 +718,11 @@ void TrackerSystem<T, N>::indexToWeight(TrackCandidate<T, N>* cnd){
     int index = cnd->indexes.at(plane);
     cnd->weights.at(plane).resize( planes.at(plane).meas.size() );
     if(cnd->weights.at(plane).size() > 0){ cnd->weights.at(plane).setZero();}
-    if( index < 0){ continue; }
-    //cnd->weights.at(plane).resize(index + 1);
-    cnd->weights.at(plane).setZero();
-    cnd->weights.at(plane)(index) = 1.0;
-    planes.at(plane).weights = cnd->weights.at(plane);
+    if( index >= 0){
+      //cnd->weights.at(plane).resize(index + 1);
+      //cnd->weights.at(plane).setZero();
+      cnd->weights.at(plane)(index) = 1.0;
+    }
   }
 }
 
@@ -872,8 +870,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     Matrix<T, N, N> tmp4x4 = est->cov;
     fastInvert(tmp4x4);
     state = tmp4x4 * est->params;
-    // cout << "nMeas " << nMeas << endl <<  "cov: " << tmp4x4.diagonal().start(2) << endl;
-    // cout << "sigmasq " << planes.at(plane).getSigmas().cwise().square() << endl;
     errv = planes.at(plane).getSigmas().cwise().square() + tmp4x4.diagonal().start(2);
   }
   //If only one measurement has been read in. prepare for checking angles
@@ -896,6 +892,19 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
       //If more than 1 measurements, get chi2
       resv = (state.start(2) - mm.getM()).cwise().square();
       chi2 = (resv.cwise() / errv).sum();
+      
+      // //From here
+      // {
+      // 	boost::mutex::scoped_lock lock(plotGuard);
+      // 	bool real = mm.goodRegion();
+      // 	if(real){
+      // 	  g_ckfRealChi2->Fill(chi2);
+      // 	}else{
+      // 	  g_ckfFakeChi2->Fill(chi2);
+      // 	}
+      // }
+      // //To here
+
       if (chi2 <  getCKFChi2Cut() ) { 
 	filterMeas = true;
       }
@@ -919,7 +928,7 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
   }
   //Skip plane if we are allowed to skip more measurements, and including a measurement did not lead to 
   // a new track candidate being accepted.
-  if( tmpNtracks == getNtracks() and nSkipped < 3){
+  if( tmpNtracks == getNtracks() and nSkipped < m_skipMax){
     indexes.at(plane) = -1;
     fitPermutation(plane + 1, est, nSkipped + 1, indexes, nMeas);
   }

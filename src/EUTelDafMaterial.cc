@@ -314,13 +314,13 @@ void EUTelDafMaterial::dafEnd() {
   // Minimizer* minimize = new FwBw(_matest); //FWBW
   // Minimizer* minimize = new SDR(true,false,false,_matest); //SDR1
   // Minimizer* minimize = new SDR(false,true,false,_matest); //SDR2
-  Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3, 
+  //Minimizer* minimize = new SDR(true,true,false,_matest); //SDR3, 
   //Minimizer* minimize = new FakeChi2(_matest);
   //Minimizer* minimize = new FakeAbsDev(_matest);
-  _matest.simplexSearch(minimize, 3000, 30);
+  //_matest.simplexSearch(minimize, 3000, 30);
   
-  //FwBw* minimize = new FwBw(_matest); //HYBR
-  //_matest.quasiNewtonHomeMade(minimize, 40);
+  FwBw* minimize = new FwBw(_matest); //HYBR
+  _matest.quasiNewtonHomeMade(minimize, 400);
 
 
   //Use this for alignment only. 

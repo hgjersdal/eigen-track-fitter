@@ -2,6 +2,7 @@
 #include <gsl/gsl_multimin.h>
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
+#include <TH2D.h>
 
 void EstMat::addTrack( std::vector<Measurement<FITTERTYPE> > track){
   //Add a track to memory
@@ -595,6 +596,10 @@ void EstMat::plot(char* fname){
   TH1D* ndof = new TH1D("ndof", "ndof", 15, 0, 15);
   TH1D* pValue = new TH1D("pValue", "pValue", 100,0,1);
   TH1D* chi2OverNeod = new TH1D("chi2ndof","chi2 over ndof", 100, 0, 20);
+  TH2D* corr34X = new TH2D("correlations34x", "correlations34x", 100, -4, 4, 100, -4, 4);
+  TH2D* corr34Y = new TH2D("correlations34y", "correlations34y", 100, -4, 4, 100, -4, 4);
+  TH2D* corr12X = new TH2D("correlations12x", "correlations12x", 100, -4, 4, 100, -4, 4);
+  TH2D* corr12Y = new TH2D("correlations12y", "correlations12y", 100, -4, 4, 100, -4, 4);
   for(int ii = 0; ii < (int) system.planes.size(); ii++){
     char name[200];
     int sensorID = system.planes.at(ii).getSensorID();
@@ -626,6 +631,43 @@ void EstMat::plot(char* fname){
       chi2->Fill( candidate->chi2 );
       ndof->Fill( candidate->ndof );
       chi2OverNeod->Fill( candidate->chi2 / candidate->ndof );
+
+      //Plot correlations
+      if( (system.planes.at(3).meas.size() > 0) and
+	  (system.planes.at(4).meas.size() > 0)){
+	
+	TrackEstimate<FITTERTYPE, 4>* est3 = candidate->estimates.at(3);
+      	Measurement<FITTERTYPE>& meas3 = system.planes.at(3).meas.at(0);
+	Matrix<FITTERTYPE, 2, 1> resids3 = system.getResiduals(meas3, est3);
+	Matrix<FITTERTYPE, 2, 1> variance3 = system.getUnBiasedResidualErrors(system.planes.at(3), est3);
+
+	TrackEstimate<FITTERTYPE, 4>* est4 = candidate->estimates.at(4);
+      	Measurement<FITTERTYPE>& meas4 = system.planes.at(4).meas.at(0);
+	Matrix<FITTERTYPE, 2, 1> resids4 = system.getResiduals(meas4, est4);
+	Matrix<FITTERTYPE, 2, 1> variance4 = system.getUnBiasedResidualErrors(system.planes.at(4), est4);
+
+	corr34X->Fill( resids3(0)/sqrt(variance3(0)), resids4(0)/sqrt(variance4(0)));
+	corr34Y->Fill( resids3(1)/sqrt(variance3(1)), resids4(1)/sqrt(variance4(1)));
+      }
+
+      if( (system.planes.at(1).meas.size() > 0) and
+	  (system.planes.at(2).meas.size() > 0)){
+	
+	TrackEstimate<FITTERTYPE, 4>* est6 = candidate->estimates.at(6);
+      	Measurement<FITTERTYPE>& meas6 = system.planes.at(6).meas.at(0);
+	Matrix<FITTERTYPE, 2, 1> resids6 = system.getResiduals(meas6, est6);
+	Matrix<FITTERTYPE, 2, 1> variance6 = system.getUnBiasedResidualErrors(system.planes.at(6), est6);
+	
+	TrackEstimate<FITTERTYPE, 4>* est2 = candidate->estimates.at(2);
+      	Measurement<FITTERTYPE>& meas2 = system.planes.at(2).meas.at(0);
+	Matrix<FITTERTYPE, 2, 1> resids2 = system.getResiduals(meas2, est2);
+	Matrix<FITTERTYPE, 2, 1> variance2 = system.getUnBiasedResidualErrors(system.planes.at(2), est2);
+	
+	// corr12X->Fill( resids2(0), resids6(0));
+	// corr12Y->Fill( resids2(1), resids6(1));
+	corr12X->Fill( resids2(0)/sqrt(variance2(0)), resids6(0)/sqrt(variance6(0)));
+	corr12Y->Fill( resids2(1)/sqrt(variance2(1)), resids6(1)/sqrt(variance6(1)));
+      }
       
       for(int ii = 0; ii < (int) system.planes.size() ; ii++ ){
 	candidate->estimates.at(ii)->copy( system.m_fitter->smoothed.at(ii) );
@@ -649,6 +691,10 @@ void EstMat::plot(char* fname){
   pValue->Write();
   ndof->Write();
   chi2OverNeod->Write();
+  corr34X->Write();
+  corr34Y->Write();
+  corr12X->Write();
+  corr12Y->Write();
   for(size_t ii = 0; ii < system.planes.size(); ii++){
     resX.at(ii)->Write();
     resY.at(ii)->Write();
@@ -656,6 +702,19 @@ void EstMat::plot(char* fname){
     pullY.at(ii)->Write();
   }
 
+
+  // cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // for(int ii = 0; ii < 100; ii++){
+  //   for(int jj = 0; jj < 100; jj++){
+  //     cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //   }
+  // }
 
   std::cout << "(defparameter *DUMMY*" << endl;
   std::cout << "(list" << std::endl;
@@ -667,6 +726,7 @@ void EstMat::plot(char* fname){
     std::cout << ":histo" << ii << " ";
     printHisto(pullX.at(ii));
   }
+
   //Pull means
   std::cout << ":means (list";
   for(int ii = 0; ii < pullX.size(); ii++){

@@ -31,11 +31,11 @@ EigenFitter<T,N>::EigenFitter(int nPlanes){
 
 //Weigh estimates
 template <typename T, size_t N>
-void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,N>* e, T chi2cutoff){
+void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,N>* e, T chi2cutoff, Matrix<T, Eigen::Dynamic, 1> &weights){
   //Calculate neasurement weights based on residuals
   size_t nMeas = plane.meas.size();
-  plane.weights.resize(nMeas);
-  if(nMeas > 0) plane.weights.setZero();
+  weights.resize(nMeas);
+  if(nMeas > 0) weights.setZero();
   //Get the value exp( -chi2 / 2t) for each measurement
   for(size_t m = 0; m < nMeas ; m++){
     const Measurement<T> &meas = plane.meas[m];
@@ -48,21 +48,21 @@ void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,
     //resids = plane.getVars() + Matrix<T, 2, 1>( e->cov(0,0), e->cov(1,1) );
     //chi2s = chi2s.cwise() / resids;
     T chi2 = chi2s.sum();
-    plane.weights(m) = exp( -1 * chi2 / (2 * tval));
+    weights(m) = exp( -1 * chi2 / (2 * tval));
     //if(isnan(plane.weights(m))){exit(1);}
   }
   T cutWeight = exp( -1 * chi2cutoff / (2 * tval));
-  plane.weights /= (cutWeight + plane.weights.sum() + FLT_MIN);
-  plane.setTotWeight( plane.weights.sum() );
+  weights /= (cutWeight + weights.sum() + FLT_MIN);
+  plane.setTotWeight( weights.sum() );
 }
 
 template <typename T, size_t N>
-void EigenFitter<T,N>::calculateWeights(std::vector<FitPlane<T> > &planes, T chi2cut){
+void EigenFitter<T,N>::calculateWeights(std::vector<FitPlane<T> > &planes, T chi2cut, std::vector< Matrix<T, Eigen::Dynamic, 1> > &weights){
   //Estimate measurement weights in all planes based on smoothed track estimate
   //Track estimates should be unbiased.
   size_t nPlanes = planes.size();
   for(size_t plane = 0; plane < nPlanes; plane++){
-    calculatePlaneWeight( planes[plane], smoothed[plane], chi2cut);
+    calculatePlaneWeight( planes[plane], smoothed[plane], chi2cut, weights.at(plane));
   }
 }
 
@@ -73,7 +73,7 @@ void EigenFitter<T,N>::addScatteringInfo(const FitPlane<T>& pl, TrackEstimate<T,
   //inv( C + H Q H') = W - W H inv(inv(Q) + H' W H ) H' W
   //inv( C + H Q H')x = Wx - W H inv(inv(Q) + H' W H ) H' Wx
  
-  //Assuming diagonal Q, no covariance between angles in the fit.
+  //Assuming diagonal Q, and no covariance between angles in the fit.
   //W H inv(inv(Q) + H' W H ) H' and e->cov are not fully populated,
   //the following takes advantage of this.
   T scattervar2 = 1.0f/(e->cov(2,2) + 1.0f/ pl.getScatterThetaSqr());
@@ -135,7 +135,7 @@ namespace daffitter{
   }
   
   template <typename T, size_t N>
-  void EigenFitter<T,N>::updateInfoDaf(const FitPlane<T> &pl, TrackEstimate<T,N>* e){
+  void EigenFitter<T,N>::updateInfoDaf(const FitPlane<T> &pl, TrackEstimate<T,N>* e, Matrix<T, Eigen::Dynamic, 1> &weights){
     //Read a measurement into the weighted information filter
     if(pl.isExcluded()) { return;}
     //Weight matrix:
@@ -146,7 +146,7 @@ namespace daffitter{
     // x = x + H'G M
     double nMeas = pl.meas.size();
     for(size_t ii = 0 ; ii < nMeas; ii++){
-      e->params.start(2) += pl.weights(ii) * (pl.meas[ii].getM().cwise() * pl.invMeasVar);
+      e->params.start(2) += weights(ii) * (pl.meas[ii].getM().cwise() * pl.invMeasVar);
     }
   }
   

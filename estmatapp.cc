@@ -61,8 +61,8 @@ void initialGuess(EstMat& mat){
 
   //TEL, set to true values
   for(int ii = 0; ii < mat.system.planes.size(); ii++){
-    mat.resX.at(ii) = mat.resY.at(ii) = 4.3;
-    mat.radLengths.at(ii) = 0.0073;
+    mat.resX.at(ii) = mat.resY.at(ii) = 4.3 * 2;
+    mat.radLengths.at(ii) = 0.0073  * 2;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
   
@@ -70,10 +70,10 @@ void initialGuess(EstMat& mat){
   for(int ii = 3; ii < 6; ii++){
     double gr1(0), gr2(0);
     gaussRand(gr1, gr2);
-    mat.resX.at(ii) = 15.0 + 3.0 * gr1;
-    mat.resY.at(ii) = 115.0 + 3.0 * gr2;
+    mat.resX.at(ii) = 2 * 15.0 + 3.0 * gr1;
+    mat.resY.at(ii) = 2 * 115.0 + 3.0 * gr2;
     gaussRand(gr1, gr2);
-    mat.radLengths.at(ii) = 0.08 + 0.02 * gr1;
+    mat.radLengths.at(ii) = 2 * 0.08 + 0.02 * gr1;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
 }
@@ -152,6 +152,8 @@ int main(int argc, char* argv[]){
     
     simulateTracks(mat, nTracks); //Configure true state in this function
     initialGuess(mat); //Set up initial guesses for material and resolutions, 
+    mat.plot( (char*) "test.root");
+    return 0;
     //alignment should work with bad resolution and material budget estimates
     if(strcmp(argv[1], "align") == 0){
       prepareAlignment(mat); //Set up initial guesses for alignment parameters
@@ -219,10 +221,10 @@ int main(int argc, char* argv[]){
     cout << "Done estimating" << endl << endl << endl;
     
     //Plot pull distributions, residuals and chi squares
-    // char* plotname = new char[200];
-    // sprintf(plotname, "plots/iteration%i%s.root", (int)outeriter, argv[1]); 
-    // mat.plot(plotname);
-    // delete plotname;
+    char* plotname = new char[200];
+    sprintf(plotname, "plots/iteration%i%s.root", (int)outeriter, argv[1]); 
+    mat.plot(plotname);
+    delete plotname;
     
     //Fill histograms of estimates and plot
     for( int ii = 3; ii < 6; ii++) {
