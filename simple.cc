@@ -143,8 +143,6 @@ int main(){
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
       if( ii > 0) { cout << "Several candidates!!!" << endl; }
       TrackCandidate<float, 4>* track =  system.tracks.at(ii);
-      //Prepare track candidate for DAF fitting by assigning weights to measurements.
-      system.indexToWeight( track );
       //Fit track with DAF. Also calculates DAF approximation of chi2 and ndof
       system.fitPlanesInfoDaf( track );
       //Extract the indexes from DAF weights for easy plotting
