@@ -18,7 +18,7 @@ boost::mutex randGuard;
 #include "simutils.h"
 
 //#define DAF //CKF + DAF
-#define CLU // CLU + DAF
+//#define CLU // CLU + DAF
 //no define is CKF + KF
 
 #ifdef CLU //CLU only works with DAF

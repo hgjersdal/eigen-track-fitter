@@ -70,7 +70,6 @@ inline void FitPlane<T>::print(){
 template <typename T, size_t N>
 TrackerSystem<T, N>::TrackerSystem() : m_inited(false), m_maxCandidates(100), m_minClusterSize(3), m_nXdz(0.0f), m_nYdz(0.0), m_nXdzdeviance(0.01),m_nYdzdeviance(0.01), m_skipMax(2) {
   //Constructor for the system of detector planes.
-  //m_chi2vals.resize(100,0);
 }
 
 template <typename T, size_t N>
@@ -81,7 +80,6 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
 								    m_dafChi2(sys.m_dafChi2), m_ckfChi2(sys.m_ckfChi2), 
 								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius),
 								    m_skipMax(sys.m_skipMax){
-  //m_chi2vals.resize(100,0);
   //cout << "Cloning tracker system:" << endl;
   for(size_t ii = 0; ii < sys.planes.size(); ii++){
     const FitPlane<T>& pl = sys.planes.at(ii);
@@ -324,26 +322,6 @@ void TrackerSystem<T, N>::fitInfoBWBiased(TrackCandidate<T, N> *candidate){
     m_fitter->addScatteringInfo( planes.at(ii), e);
     m_fitter->updateInfo( planes.at(ii), candidate->indexes.at(ii), e );
     m_fitter->backward.at(ii)->copy(e);
-  }
-  delete e;
-}
-
-template <typename T,size_t N>
-void TrackerSystem<T, N>::fitInfoBWUnBiasedBackSide(TrackCandidate<T, N> *candidate){
-  // Fit planes in the BW direction (decreasing z position). Unbiased means the predictions are saved.
-  // The predictions are made on the backside of the plane, 
-  // i.e. no scattering for the current plane has been added to the saved estimate
-  size_t nPlanes = planes.size();
-  TrackEstimate<T, N>* e = new TrackEstimate<T, N>();
-  e->makeSeedInfo(true);
-  //Backward fitter, scattering included at plane, unbiased
-  m_fitter->backward.at( nPlanes -1 )->copy(e);
-  m_fitter->updateInfo( planes.at(nPlanes -1 ), candidate->indexes.at(nPlanes -1), e );
-  for(int ii = nPlanes -2; ii >= 0; ii-- ){
-    m_fitter->predictInfo( planes.at( ii + 1 ), planes.at(ii), e );
-    m_fitter->backward.at(ii)->copy(e);
-    m_fitter->updateInfo( planes.at(ii), candidate->indexes.at(ii), e );
-    m_fitter->addScatteringInfo( planes.at(ii), e);
   }
   delete e;
 }
@@ -761,10 +739,6 @@ void TrackerSystem<T, N>::combinatorialKF(){
   // Combinatorial Kalman filter track finder.
   vector<int> indexes(planes.size(), -1);
   TrackEstimate<T, N>* e = new TrackEstimate<T, N>();
-  //e->makeSeedInfo();
-  //Fit starting at plane 0
-  //fitPermutation(0, e, 0, indexes, 0);
-  
   //Check for tracks missing a hits in first planes plane 0
   for(int ii = 0; ii < m_skipMax + 1; ii++){
     if( ii > 0){ indexes.at(ii -1 ) = -1;}
@@ -782,14 +756,15 @@ void TrackerSystem<T, N>::combinatorialKF(){
       e->makeSeedInfo();
       indexes.at(ii) = hit;
       m_fitter->updateInfo(planes.at(ii), hit, e);
-      fitPermutation(ii + 1, e, ii, indexes, 1);
+      fitPermutation(ii + 1, e, ii, indexes, 1, 0.0f);
     }
   }
   delete e;
 }
 
 template <typename T,size_t N>
-void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>& indexes){
+void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>& indexes, int nMeas, T chi2){
+  //Check the fitted tracl for chi2/ndof
   fastInvert(est->cov);
   est->params = est->cov * est->params;
   if(( fabs( est->getXdz() - getNominalXdz()) > getXdzMaxDeviance() ) or
@@ -798,8 +773,11 @@ void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>
   }
   // Either reject the track, or save it
   TrackCandidate<T, N> *candidate = tracks.at( getNtracks() );
-  candidate->ndof = 0;
-  candidate->chi2 = 0;
+  candidate->ndof = nMeas * 2 - 4;
+  candidate->chi2 = chi2;
+  if(candidate->chi2/candidate->ndof > getChi2OverNdofCut()) { return;}
+  
+  //Copy
   for(int plane = 0; plane < (int) planes.size(); plane++){
     candidate->indexes.at(plane) = indexes.at(plane);
     candidate->weights.at(plane).resize( planes.at(plane).meas.size());
@@ -808,14 +786,11 @@ void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>
       candidate->weights.at(plane)(indexes.at(plane)) = 1.0;
     }
   }
-  fitInfoFWBiased(candidate);
-  getChi2BiasedInfo(candidate);
-  if(candidate->chi2/candidate->ndof > getChi2OverNdofCut()) { return;}
   m_nTracks++;
 }
 
 template <typename T,size_t N>
-void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, int nSkipped, vector<int> &indexes, int nMeas){
+void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, int nSkipped, vector<int> &indexes, int nMeas, T chi2){
   //Check a branch of the track tree. Either kill it or, let it live.
   if( getNtracks() >= m_maxCandidates){
     cout << "Reached maximum number of track candidates, " << m_maxCandidates << endl;
@@ -823,7 +798,7 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
   }
   //Last plane, save and quit
   if(plane == (int) planes.size()){
-    finalizeCKFTrack(est, indexes);
+    finalizeCKFTrack(est, indexes, nMeas, chi2);
     return;
   }
   //Propagate
@@ -834,14 +809,14 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
   if( planes.at(plane).isExcluded()){
     m_fitter->forward.at(plane)->copy(est);
     indexes.at(plane) = -1;
-    fitPermutation(plane + 1, est, nSkipped, indexes, nMeas);
+    fitPermutation(plane + 1, est, nSkipped, indexes, nMeas, chi2);
     return;
   }
   //Prepare for branch generation
   size_t tmpNtracks = getNtracks();
   Matrix<T,2,1> resv, errv;
   Matrix<T,4,1> state;
-  double chi2 = 0;
+  double chi2m = 0;
   double oldX(0.0), oldY(0.0), oldZ(0.0);
   //Get prediction explicitly if needed
   if(nMeas > 1){
@@ -869,9 +844,9 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     if( nMeas > 1) { 
       //If more than 1 measurements, get chi2
       resv = (state.start(2) - mm.getM()).cwise().square();
-      chi2 = (resv.cwise() / errv).sum();
+      chi2m = (resv.cwise() / errv).sum();
       
-      if (chi2 <  getCKFChi2Cut() ) { 
+      if (chi2m <  getCKFChi2Cut() ) { 
 	filterMeas = true;
       }
     } else if(nMeas == 1){ 
@@ -885,7 +860,7 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
       TrackEstimate<T, N>* clone = new TrackEstimate<T, N>(); clone->copy(est);
       m_fitter->updateInfo(planes.at(plane), hit, clone);
       indexes.at(plane)= hit;
-      fitPermutation(plane + 1, clone, nSkipped, indexes, nMeas + 1);
+      fitPermutation(plane + 1, clone, nSkipped, indexes, nMeas + 1, chi2 + chi2m);
       delete clone;
     }
   }
@@ -893,6 +868,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
   // a new track candidate being accepted.
   if( tmpNtracks == getNtracks() and nSkipped < m_skipMax){
     indexes.at(plane) = -1;
-    fitPermutation(plane + 1, est, nSkipped + 1, indexes, nMeas);
+    fitPermutation(plane + 1, est, nSkipped + 1, indexes, nMeas, chi2);
   }
 }

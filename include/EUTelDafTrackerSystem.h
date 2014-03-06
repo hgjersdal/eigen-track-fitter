@@ -256,8 +256,8 @@ namespace daffitter{
     size_t getMinClusterSize() const { return(m_minClusterSize); }
     void checkNan(TrackEstimate<T,N>* e);
     //CKF
-    void finalizeCKFTrack(TrackEstimate<T,N> *est, std::vector<int>& indexes);
-    void fitPermutation(int plane, TrackEstimate<T,N> *est, int nSkipped, std::vector<int> &indexes, int nMeas);
+    void finalizeCKFTrack(TrackEstimate<T,N> *est, std::vector<int>& indexes, int nMeas, T chi2);
+    void fitPermutation(int plane, TrackEstimate<T,N> *est, int nSkipped, std::vector<int> &indexes, int nMeas, T chi2);
     
   public: 
     //std::vector<int> m_chi2vals;
@@ -318,7 +318,6 @@ namespace daffitter{
     void fitInfoFWUnBiased(TrackCandidate<T,N> *candidate);
     void fitInfoBWUnBiased(TrackCandidate<T,N> *candidate);
     void fitInfoBWBiased(TrackCandidate<T,N> *candidate);
-    void fitInfoBWUnBiasedBackSide(TrackCandidate<T,N> *candidate);
     //Getting chi2
     void getChi2Kf(daffitter::TrackCandidate<T,N> *candidate);
     void getChi2BiasedInfo(TrackCandidate<T,N> *candidate);

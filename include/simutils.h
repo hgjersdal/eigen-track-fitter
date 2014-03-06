@@ -1,19 +1,6 @@
 #ifndef SIMUTILS
 #define SIMUTILS
 
-// void printHisto(TH1D* histo){
-//   cout << "(list" 
-//        <<  " :min " << histo->GetXaxis()->GetXmin()
-//        << " :bin-size " << histo->GetBinWidth( 0 ) << endl
-//        << ":data (list" << endl;
-//   for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
-//     cout << " " << histo->GetBinContent( ii );
-//   }
-//   cout << endl << "))" << endl;
-// }
-
-
-
 inline double normRand(){
   return( (double) random() / (double) RAND_MAX);
 }

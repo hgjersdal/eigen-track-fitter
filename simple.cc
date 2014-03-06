@@ -4,22 +4,29 @@
 #include <TFile.h>
 #include <TMath.h>
 
-// #ifndef USE_GEAR
-// #include <boost/thread.hpp>
-// #include <boost/thread/detail/thread_group.hpp>
-// #include <boost/bind.hpp>
-// #endif
-
-//boost::mutex plotGuard;
-//boost::mutex randGuard;
-
 #include "simutils.h"
-//#include "simfunction.h"
 
 /*
-Simnple application og the straight line track fitter
+Simnple application og the straight line track fitter.
+
+Simulation with no noise hits, perfect detection efficiency in all planes.
+
+Plot pulls, residuals, chi2
 */
 
+void printHisto(TH1D* histo){
+  cout << "(list" 
+       <<  " :min " << histo->GetXaxis()->GetXmin()
+       << " :bin-size " << histo->GetBinWidth( 0 ) << endl
+       << ":data (list" << endl;
+  for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
+    cout << " " << histo->GetBinContent( ii );
+  }
+  cout << endl << "))" << endl;
+}
+
+
+//Print histograms to lisp
 void lispify(vector <TH1D*> &pulls, TH1D* chi2, TH1D* pvals, const char* name){
   std::cout << "(defparameter *" << name << "*" << endl;
   std::cout << "(list" << std::endl;
@@ -63,8 +70,6 @@ int main(){
   vector <TH1D*> pullY;
   TH1D* chi2  = new TH1D("chi2","chi2",100,0,50);
   TH1D* pvals  = new TH1D("pvals","pvals",100,0,1);
-  TH1D* chi2smooth  = new TH1D("chi2smooth","chi2smooth",100,0,50);
-  TH1D* pvalssmooth  = new TH1D("pvalssmooth","pvalssmooth",100,0,1);
   for(int ii = 0; ii < nPlanes; ii++){
     char name[100];
     sprintf(name, "resX%i", ii);
@@ -142,11 +147,6 @@ int main(){
       system.indexToWeight( track );
       //Fit track with DAF. Also calculates DAF approximation of chi2 and ndof
       system.fitPlanesInfoDaf( track );
-      system.getChi2Smooth( track);
-      chi2smooth->Fill(track->chi2);
-      pvalssmooth->Fill( TMath::Gamma( track->ndof / 2, track->chi2 / 2.0) );
-      cout << track->ndof << endl;
-      system.fitPlanesInfoDaf( track );
       //Extract the indexes from DAF weights for easy plotting
       system.weightToIndex( track );
       //Fill plots
@@ -176,8 +176,6 @@ int main(){
   TFile* tfile = new TFile("plots/simple.root", "RECREATE");
   chi2->Write();
   pvals->Write();
-  chi2smooth->Write();
-  pvalssmooth->Write();
   for( int ii = 0; ii < system.planes.size(); ii++) {
     resX.at( ii )->Write();
     resY.at( ii )->Write();
@@ -188,9 +186,7 @@ int main(){
   cout << "Plotting to plots/simple.root" << endl;
   tfile->Close();
 
-
   lispify(pullX, chi2, pvals, "pullX");
   
   return(0);
 }
-
