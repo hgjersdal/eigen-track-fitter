@@ -632,27 +632,49 @@ void EstMat::plot(char* fname){
       ndof->Fill( candidate->ndof );
       chi2OverNeod->Fill( candidate->chi2 / candidate->ndof );
 
+      for(int ii = 0; ii < (int) system.planes.size() ; ii++ ){
+	candidate->estimates.at(ii)->copy( system.m_fitter->smoothed.at(ii) );
+      }
+      for(size_t pl = 0; pl < system.planes.size(); pl++){
+      	if( system.planes.at(pl).meas.size() < 1){ continue; }
+      	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
+	TrackEstimate<FITTERTYPE, 4>* est = candidate->estimates.at(pl);
+	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, est);
+	Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), est);
+      	resX.at(pl)->Fill(resids(0));
+      	resY.at(pl)->Fill(resids(1));
+      	pullX.at(pl)->Fill(resids(0)/sqrt(variance(0)));
+      	pullY.at(pl)->Fill(resids(1)/sqrt(variance(1)));
+      }
       //Plot correlations
       if( (system.planes.at(3).meas.size() > 0) and
 	  (system.planes.at(4).meas.size() > 0)){
-	
+	system.planes.at(3).exclude();
+	system.planes.at(4).exclude();
+	system.fitPlanesInfoUnBiased(candidate);
+
 	TrackEstimate<FITTERTYPE, 4>* est3 = candidate->estimates.at(3);
       	Measurement<FITTERTYPE>& meas3 = system.planes.at(3).meas.at(0);
 	Matrix<FITTERTYPE, 2, 1> resids3 = system.getResiduals(meas3, est3);
 	Matrix<FITTERTYPE, 2, 1> variance3 = system.getUnBiasedResidualErrors(system.planes.at(3), est3);
-
+	
 	TrackEstimate<FITTERTYPE, 4>* est4 = candidate->estimates.at(4);
       	Measurement<FITTERTYPE>& meas4 = system.planes.at(4).meas.at(0);
 	Matrix<FITTERTYPE, 2, 1> resids4 = system.getResiduals(meas4, est4);
 	Matrix<FITTERTYPE, 2, 1> variance4 = system.getUnBiasedResidualErrors(system.planes.at(4), est4);
-
+	
 	corr34X->Fill( resids3(0)/sqrt(variance3(0)), resids4(0)/sqrt(variance4(0)));
 	corr34Y->Fill( resids3(1)/sqrt(variance3(1)), resids4(1)/sqrt(variance4(1)));
+	system.planes.at(3).include();
+	system.planes.at(4).include();
       }
-
+      
       if( (system.planes.at(1).meas.size() > 0) and
 	  (system.planes.at(2).meas.size() > 0)){
 	
+	system.planes.at(1).exclude();
+	system.planes.at(2).exclude();
+	system.fitPlanesInfoUnBiased(candidate);
 	TrackEstimate<FITTERTYPE, 4>* est6 = candidate->estimates.at(6);
       	Measurement<FITTERTYPE>& meas6 = system.planes.at(6).meas.at(0);
 	Matrix<FITTERTYPE, 2, 1> resids6 = system.getResiduals(meas6, est6);
@@ -667,21 +689,8 @@ void EstMat::plot(char* fname){
 	// corr12Y->Fill( resids2(1), resids6(1));
 	corr12X->Fill( resids2(0)/sqrt(variance2(0)), resids6(0)/sqrt(variance6(0)));
 	corr12Y->Fill( resids2(1)/sqrt(variance2(1)), resids6(1)/sqrt(variance6(1)));
-      }
-      
-      for(int ii = 0; ii < (int) system.planes.size() ; ii++ ){
-	candidate->estimates.at(ii)->copy( system.m_fitter->smoothed.at(ii) );
-      }
-      for(size_t pl = 0; pl < system.planes.size(); pl++){
-      	if( system.planes.at(pl).meas.size() < 1){ continue; }
-      	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	TrackEstimate<FITTERTYPE, 4>* est = candidate->estimates.at(pl);
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, est);
-	Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), est);
-      	resX.at(pl)->Fill(resids(0));
-      	resY.at(pl)->Fill(resids(1));
-      	pullX.at(pl)->Fill(resids(0)/sqrt(variance(0)));
-      	pullY.at(pl)->Fill(resids(1)/sqrt(variance(1)));
+	system.planes.at(1).include();
+	system.planes.at(2).include();
       }
     }
   }
@@ -703,18 +712,18 @@ void EstMat::plot(char* fname){
   }
 
 
-  // cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // for(int ii = 0; ii < 100; ii++){
-  //   for(int jj = 0; jj < 100; jj++){
-  //     cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //   }
-  // }
+  cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  for(int ii = 0; ii < 100; ii++){
+    for(int jj = 0; jj < 100; jj++){
+      cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+      cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+      cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+      cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+    }
+  }
 
   std::cout << "(defparameter *DUMMY*" << endl;
   std::cout << "(list" << std::endl;

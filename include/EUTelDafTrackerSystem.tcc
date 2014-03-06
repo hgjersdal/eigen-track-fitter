@@ -547,28 +547,21 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
     }
     ndof += planes.at(plane).getTotWeight() * 2.0;
   }
-  //cout << "First fit!" << endl;
   fitPlanesInfoDafInner(candidate);
   if(isnan(ndof)) { ndof = -10.0; }
   // Temperatures should be given from top level. This should be fixed.
-  // if(ndof > -1.9f) { ndof = runTweight(7.0);}// else {  cout <<"killed by 1" << endl;}
-  // if(ndof > -1.9f) { ndof = runTweight(7.0); }// else {  cout <<"killed by 1, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(3.0, candidate); }// else {  cout <<"killed by 2, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.5, candidate); }// else {  cout <<"killed by 3, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(1.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  // if(ndof > -1.9f) { ndof = runTweight(0.5); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
-  // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
-  // if(ndof > -1.9f) { ndof = runTweight(0.1); }// else {  cout <<"killed by 6, " << ndof << endl; return;}
+  if(ndof > -1.0f) { ndof = runTweight(25.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.0f) { ndof = runTweight(20.0, candidate); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight(14.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight( 8.0, candidate); } // else {  cout <<"killed by 3, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight( 4.0, candidate); } // else {  cout <<"killed by 2, " << ndof << endl; return;}
+  if(ndof > -1.9f) { ndof = runTweight( 1.0, candidate); } // else {  cout <<"killed by 1, " << ndof << endl; return;}
   
   if(ndof > -1.9f) {
     for(int ii = 0; ii <(int)  planes.size() ; ii++ ){
       //Store estimates and weights in candidate
       candidate->estimates.at(ii)->copy( m_fitter->smoothed.at(ii) );
     }
-    //fitPlanesInfoDafBiased();
     getChi2UnBiasedInfoDaf(candidate);
     weightToIndex(candidate);
   } else{
@@ -768,42 +761,29 @@ void TrackerSystem<T, N>::combinatorialKF(){
   // Combinatorial Kalman filter track finder.
   vector<int> indexes(planes.size(), -1);
   TrackEstimate<T, N>* e = new TrackEstimate<T, N>();
-  e->makeSeedInfo();
+  //e->makeSeedInfo();
   //Fit starting at plane 0
-  fitPermutation(0, e, 0, indexes, 0);
-
-  //Check for tracks missing a hit in plane 0
-  indexes.at(0) = -1;
-  for(int hit = 0; hit < (int)planes.at(1).meas.size(); hit++){
-    bool doContinue(false);
-    for(int track = 0; track < getNtracks() ; track++){
-      if(tracks.at(track)->indexes.at(1) == hit){
-	doContinue = true; break;
+  //fitPermutation(0, e, 0, indexes, 0);
+  
+  //Check for tracks missing a hits in first planes plane 0
+  for(int ii = 0; ii < m_skipMax + 1; ii++){
+    if( ii > 0){ indexes.at(ii -1 ) = -1;}
+    for(int hit = 0; hit < (int)planes.at(ii).meas.size(); hit++){
+      if( ii > 0){
+	bool doContinue(false);
+	//Look for accepted track including hit
+	for(int track = 0; track < getNtracks() ; track++){
+	  if(tracks.at(track)->indexes.at(ii) == hit){
+	    doContinue = true; break;
+	  }
+	}
+	if(doContinue){ continue; } //Skip if measurement is included in another track
       }
+      e->makeSeedInfo();
+      indexes.at(ii) = hit;
+      m_fitter->updateInfo(planes.at(ii), hit, e);
+      fitPermutation(ii + 1, e, ii, indexes, 1);
     }
-    if(doContinue){ continue; } 
-    e->makeSeedInfo();
-    indexes.at(1) = hit;
-    m_fitter->updateInfo(planes.at(1), hit, e);
-    m_fitter->addScatteringInfo( planes.at(1), e);
-    fitPermutation(2, e, 1, indexes, 1);
-  }
-
-  //Check for tracks missing a hit in plane 0 and 1
-  indexes.at(1) = -1;
-  for(int hit = 0; hit < (int)planes.at(2).meas.size(); hit++){
-    bool doContinue(false);
-    for(int track = 0; track < getNtracks() ; track++){
-      if(tracks.at(track)->indexes.at(2) == hit){
-	doContinue = true; break;
-      }
-    }
-    if(doContinue){ continue; } 
-    e->makeSeedInfo();
-    indexes.at(2) = hit;
-    m_fitter->updateInfo(planes.at(2), hit, e);
-    m_fitter->addScatteringInfo( planes.at(2), e);
-    fitPermutation(3, e, 2, indexes, 1);
   }
   delete e;
 }
@@ -846,12 +826,10 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     finalizeCKFTrack(est, indexes);
     return;
   }
-  //Unless first measurement plane, get prediction at plane
-  if( nMeas > 0 ){
-    if(nMeas > 1) m_fitter->addScatteringInfo( planes.at(plane - 1), est);
-    //Propagate
-    m_fitter->predictInfo(planes.at( plane - 1), planes.at(plane), est);
-  }
+  //Propagate
+  if(nMeas > 1) { m_fitter->addScatteringInfo( planes.at(plane - 1), est);}
+  m_fitter->predictInfo(planes.at( plane - 1), planes.at(plane), est);
+
   //Excluded plane, propagate without looking for measurement
   if( planes.at(plane).isExcluded()){
     m_fitter->forward.at(plane)->copy(est);
@@ -893,18 +871,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
       resv = (state.start(2) - mm.getM()).cwise().square();
       chi2 = (resv.cwise() / errv).sum();
       
-      // //From here
-      // {
-      // 	boost::mutex::scoped_lock lock(plotGuard);
-      // 	bool real = mm.goodRegion();
-      // 	if(real){
-      // 	  g_ckfRealChi2->Fill(chi2);
-      // 	}else{
-      // 	  g_ckfFakeChi2->Fill(chi2);
-      // 	}
-      // }
-      // //To here
-
       if (chi2 <  getCKFChi2Cut() ) { 
 	filterMeas = true;
       }
@@ -913,9 +879,6 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
       double newZ = planes.at(plane).getZpos();
       if ( (fabs((mm.getX() - oldX)/(newZ - oldZ) - getNominalXdz()) < getXdzMaxDeviance()) and
 	   (fabs((mm.getY() - oldY)/(newZ - oldZ) - getNominalYdz()) < getYdzMaxDeviance())){ filterMeas = true;}
-    } else if(nMeas == 0){ 
-      // Try all measurements in first plane
-      filterMeas = true;
     }
     //Did the measurement pass cuts? If so propagate branch
     if ( filterMeas ){ 

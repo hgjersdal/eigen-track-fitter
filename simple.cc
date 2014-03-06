@@ -20,17 +20,6 @@
 Simnple application og the straight line track fitter
 */
 
-void printHisto(TH1D* histo){
-  cout << "(list" 
-       <<  " :min " << histo->GetXaxis()->GetXmin()
-       << " :bin-size " << histo->GetBinWidth( 0 ) << endl
-       << ":data (list" << endl;
-  for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
-    cout << " " << histo->GetBinContent( ii );
-  }
-  cout << endl << "))" << endl;
-}
-
 void lispify(vector <TH1D*> &pulls, TH1D* chi2, TH1D* pvals, const char* name){
   std::cout << "(defparameter *" << name << "*" << endl;
   std::cout << "(list" << std::endl;
