@@ -80,7 +80,6 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
 								    m_dafChi2(sys.m_dafChi2), m_ckfChi2(sys.m_ckfChi2), 
 								    m_chi2OverNdof(sys.m_chi2OverNdof), m_sqrClusterRadius(sys.m_sqrClusterRadius),
 								    m_skipMax(sys.m_skipMax){
-  //cout << "Cloning tracker system:" << endl;
   for(size_t ii = 0; ii < sys.planes.size(); ii++){
     const FitPlane<T>& pl = sys.planes.at(ii);
     this->addPlane(pl.getSensorID(), pl.getZpos(), pl.getSigmaX(), pl.getSigmaY(), pl.getScatterThetaSqr(), pl.isExcluded());
@@ -273,6 +272,7 @@ void TrackerSystem<T, N>::fitInfoFWUnBiased(TrackCandidate<T, N> *candidate){
   }
   delete e;
 }
+
 template <typename T,size_t N>
 void TrackerSystem<T, N>::fitInfoFWBiased(TrackCandidate<T, N> *candidate){
   //Fit planes in the FW direction (increasing z position). Biased means the updated estimates are saved
@@ -291,6 +291,7 @@ void TrackerSystem<T, N>::fitInfoFWBiased(TrackCandidate<T, N> *candidate){
   }
   delete e;
 }
+
 template <typename T,size_t N>
 void TrackerSystem<T, N>::fitInfoBWUnBiased(TrackCandidate<T, N> *candidate){
   //Fit planes in the BW direction (decreasing z position). Unbiased means the predictions are saved
@@ -308,6 +309,7 @@ void TrackerSystem<T, N>::fitInfoBWUnBiased(TrackCandidate<T, N> *candidate){
   }
   delete e;
 }
+
 template <typename T,size_t N>
 void TrackerSystem<T, N>::fitInfoBWBiased(TrackCandidate<T, N> *candidate){
   //Fit planes in the BW direction (decreasing z position). Biased means the predictions are saved
@@ -473,7 +475,7 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
 
 template <typename T,size_t N>
 void TrackerSystem<T, N>::intersect(){
-  //Check where a straight line track intersects a material plane, update the measurement z position
+  //Check where a straight line track intersects with a measurement plane, update the measurement z position
   for(int plane = 0; plane < (int) planes.size(); plane++ ){
     FitPlane<T> & pl = planes.at(plane);
     TrackEstimate<T, N>* estim = m_fitter->smoothed.at(plane);
@@ -527,13 +529,14 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
   }
   fitPlanesInfoDafInner(candidate);
   if(isnan(ndof)) { ndof = -10.0; }
-  // Temperatures should be given from top level. This should be fixed.
-  if(ndof > -1.0f) { ndof = runTweight(25.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.0f) { ndof = runTweight(20.0, candidate); }// else {  cout <<"killed by 5, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight(14.0, candidate); }// else {  cout <<"killed by 4, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight( 8.0, candidate); } // else {  cout <<"killed by 3, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight( 4.0, candidate); } // else {  cout <<"killed by 2, " << ndof << endl; return;}
-  if(ndof > -1.9f) { ndof = runTweight( 1.0, candidate); } // else {  cout <<"killed by 1, " << ndof << endl; return;}
+
+  // Running with fixed annealing schedule.
+  if(ndof > -1.0f) { ndof = runTweight(25.0, candidate); }
+  if(ndof > -1.0f) { ndof = runTweight(20.0, candidate); }
+  if(ndof > -1.9f) { ndof = runTweight(14.0, candidate); }
+  if(ndof > -1.9f) { ndof = runTweight( 8.0, candidate); }
+  if(ndof > -1.9f) { ndof = runTweight( 4.0, candidate); }
+  if(ndof > -1.9f) { ndof = runTweight( 1.0, candidate); }
   
   if(ndof > -1.9f) {
     for(int ii = 0; ii <(int)  planes.size() ; ii++ ){
@@ -550,7 +553,7 @@ void TrackerSystem<T, N>::fitPlanesInfoDaf(TrackCandidate<T, N> *candidate){
 
 template <typename T,size_t N>
 void TrackerSystem<T, N>::checkNan(TrackEstimate<T, N>* e){
-  //See if there are any nans in the estimate. For debugging numerical problems
+  //See if there are any nans in the estimate. For debugging numerical problems.
   if( isnan(e->params(0)) or
       isnan(e->params(1)) or
       isnan(e->params(2)) or
@@ -690,13 +693,10 @@ void TrackerSystem<T, N>::indexToWeight(TrackCandidate<T, N>* cnd){
     cnd->weights.at(plane).resize( planes.at(plane).meas.size() );
     if(cnd->weights.at(plane).size() > 0){ cnd->weights.at(plane).setZero();}
     if( index >= 0){
-      //cnd->weights.at(plane).resize(index + 1);
-      //cnd->weights.at(plane).setZero();
       cnd->weights.at(plane)(index) = 1.0;
     }
   }
 }
-
 
 template <typename T,size_t N>
 void TrackerSystem<T, N>::fitPlanesKF(TrackCandidate<T, N> *candidate){
@@ -777,15 +777,11 @@ void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N> *est, vector<int>
   candidate->chi2 = chi2;
   if(candidate->chi2/candidate->ndof > getChi2OverNdofCut()) { return;}
   
-  //Copy
+  //Copy indexes, assign weights
   for(int plane = 0; plane < (int) planes.size(); plane++){
     candidate->indexes.at(plane) = indexes.at(plane);
-    candidate->weights.at(plane).resize( planes.at(plane).meas.size());
-    if(planes.at(plane).meas.size() > 0) { candidate->weights.at(plane).setZero(); }
-    if( indexes.at(plane) > -1){
-      candidate->weights.at(plane)(indexes.at(plane)) = 1.0;
-    }
   }
+  indexToWeight( candidate );
   m_nTracks++;
 }
 

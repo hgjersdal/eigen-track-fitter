@@ -62,9 +62,6 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
     TrackCandidate<float, 4>* track =  system.tracks.at(ii);
     // Fit the track!
-#if !(defined CLU) && defined DAF
-    system.indexToWeight( track );
-#endif 
 #ifdef DAF
     system.fitPlanesInfoDaf( track );
     system.weightToIndex( track );
@@ -250,9 +247,9 @@ int main(){
 #ifdef CLU
   for(radius = 110; radius < 200; radius += 5)
 #elif defined DAF
-  for(chi2cut = 1; chi2cut < 20 ; chi2cut += 0.5)
+  for(chi2cut = 5; chi2cut < 20 ; chi2cut += 0.5)
 #else
-  for(ckfcut = 1; ckfcut < 20 ; ckfcut += 0.5)
+  for(ckfcut = 5; ckfcut < 20 ; ckfcut += 0.5)
 #endif
   {
     //Prepare lisp output to be analyzed elsewhere.
