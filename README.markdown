@@ -1,4 +1,4 @@
-#eigen2-track-fitter
+#eigen3-track-fitter
 
 A straight line track fitter for test beam analysis of pixel partickle detectors.
 
@@ -12,7 +12,7 @@ Code for using the fitter and material estimator from the EUTELESCOPE software f
 
 ##Dependencies
 
-The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen2. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading.
+The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen3. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading.
 
 The simulation experiments use root for plotting.
 

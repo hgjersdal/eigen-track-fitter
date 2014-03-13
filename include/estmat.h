@@ -11,7 +11,6 @@
 #include <TMath.h>
 
 #include <Eigen/Core>
-#include <Eigen/Array>
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
 

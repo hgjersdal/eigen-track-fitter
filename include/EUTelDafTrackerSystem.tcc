@@ -1,7 +1,6 @@
 #include <iostream>
 #include <algorithm>
 #include <Eigen/Core>
-#include <Eigen/Array>
 
 using namespace std;
 using namespace daffitter;
@@ -46,7 +45,7 @@ inline FitPlane<T>::FitPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatter
   this->sensorID = sensorID;
   this->zPosition = zPos;
   this->sigmas(0) = sigmaX; sigmas(1) = sigmaY;
-  this->variances = sigmas.cwise().square();
+  this->variances = sigmas.array().square();
   this->invMeasVar(0) = 1/(sigmaX * sigmaX);
   this->invMeasVar(1) = 1/(sigmaY * sigmaY);
   this->scatterThetaSqr = scatterThetaSqr;
@@ -90,19 +89,19 @@ TrackerSystem<T, N>::TrackerSystem(const TrackerSystem<T,N>& sys) : m_inited(fal
 template <typename T,size_t N>
 inline Matrix<T, 2, 1> TrackerSystem<T, N>::getBiasedResidualErrors(FitPlane<T>& pl, TrackEstimate<T, N>* est){
   //Get covariance matrix diagonal vector for biased residuals: distance from filtered/updated estimate to measurement
-  return(pl.getSigmas().cwise().square() - est->cov.diagonal().start(2));
+  return(pl.getSigmas().array().square() - est->cov.diagonal().head(2).array());
 }
 
 template <typename T,size_t N>
 inline Matrix<T, 2, 1> TrackerSystem<T, N>::getUnBiasedResidualErrors(FitPlane<T>& pl, TrackEstimate<T, N>* est){
   //Get covariance matrix diagonal vector for unbiased residuals: distance from unfiltered/predicted estimate to measurement
-  return(pl.getSigmas().cwise().square() + est->cov.diagonal().start(2));
+  return(pl.getSigmas().array().square() + est->cov.diagonal().head(2).array());
 }
 
 template <typename T,size_t N>
 inline Matrix<T, 2, 1> TrackerSystem<T, N>::getResiduals(Measurement<T>& m, TrackEstimate<T, N>* est){
   //Vector of distances from estimate to measurementx
-  return( m.getM() - est->params.start(2));
+  return( m.getM() - est->params.head(2));
 }
 
 template <typename T,size_t N>
@@ -369,9 +368,9 @@ void TrackerSystem<T, N>::getChi2Kf(TrackCandidate<T, N> *candidate){
     if(ndof < 1.5) { ndof+= 1.0; continue;}
     Measurement<T>& m = p.meas.at( candidate->indexes.at(plane));
     TrackEstimate<T, N>* est = m_fitter->forward.at(plane);
-    resv = getResiduals(m, est).cwise().square();
+    resv = getResiduals(m, est).array().square();
     errv = getUnBiasedResidualErrors(p, est);
-    chi2 += (resv.cwise() / errv).sum();
+    chi2 += (resv.array() / errv.array()).sum();
     ndof += 1.0;
   }
   candidate->chi2 = chi2; 
@@ -396,13 +395,12 @@ void TrackerSystem<T, N>::getChi2BiasedInfo(TrackCandidate<T, N> *candidate){
 
     Measurement<T> & m = planes.at(ii).meas.at(index);
     estim->copy(m_fitter->forward.at(ii));
-    tmp4x4 = estim->cov;
-    tmp4x4.computeInverse(&estim->cov);
+    fastInvert(estim->cov);
     estim->params = estim->cov * estim->params;
 
-    resv = getResiduals( m, estim ).cwise().square();
+    resv = getResiduals( m, estim ).array().square();
     errv = getBiasedResidualErrors( planes.at(ii), estim);
-    chi2 += (resv.cwise() / errv).sum();
+    chi2 += (resv.array() / errv.array()).sum();
   }
   delete estim;
   candidate->chi2 = chi2;
@@ -427,13 +425,12 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfo(TrackCandidate<T, N> *candidate){
 
     Measurement<T> & m = planes.at(ii).meas.at(index);
     estim->copy(m_fitter->forward.at(ii));
-    tmp4x4 = estim->cov;
-    tmp4x4.computeInverse(&estim->cov);
+    fastInvert(estim->cov);
     estim->params = estim->cov * estim->params;
 
-    resv = getResiduals( m, estim ).cwise().square();
+    resv = getResiduals( m, estim ).array().square();
     errv = getUnBiasedResidualErrors( planes.at(ii), estim);
-    chi2 += (resv.cwise() / errv).sum();
+    chi2 += (resv.array() / errv.array()).sum();
   }
   delete estim;
   candidate->chi2 = chi2;
@@ -462,9 +459,9 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N> *candidate
     for(size_t mm = 0; mm < planes.at(ii).meas.size(); mm++){
       Measurement<T> & m = planes.at(ii).meas.at(mm);
       T weight = candidate->weights.at(ii)(mm);
-      resv = getResiduals( m, estim ).cwise().square();
+      resv = getResiduals( m, estim ).array().square();
       errv = getUnBiasedResidualErrors( planes.at(ii), estim);
-      chi2 += weight * (resv.cwise() / errv).sum();
+      chi2 += weight * (resv.array() / errv.array()).sum();
     }
   }
   delete estim;
@@ -492,7 +489,7 @@ void TrackerSystem<T, N>::intersect(){
     lineDir = lineDir.normalized();
     // p0 - l0
     Matrix<T, 3, 1> distance = refPoint - linePoint;
-    T d = distance.dot(normVec) / lineDir.dot(normVec);
+    T d = normVec.dot(distance) / normVec.dot(lineDir);
     //Propagate along track to track/plane intersection
     //estim->params(0) += d * lineDir(0);
     //estim->params(1) += d * lineDir(1);
@@ -819,7 +816,7 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     Matrix<T, N, N> tmp4x4 = est->cov;
     fastInvert(tmp4x4);
     state = tmp4x4 * est->params;
-    errv = planes.at(plane).getSigmas().cwise().square() + tmp4x4.diagonal().start(2);
+    errv = planes.at(plane).getSigmas().array().square() + tmp4x4.diagonal().head(2).array();
   }
   //If only one measurement has been read in. prepare for checking angles
   if(nMeas == 1){
@@ -839,8 +836,8 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> *est, in
     bool filterMeas = false;
     if( nMeas > 1) { 
       //If more than 1 measurements, get chi2
-      resv = (state.start(2) - mm.getM()).cwise().square();
-      chi2m = (resv.cwise() / errv).sum();
+      resv = (state.head(2) - mm.getM()).array().square();
+      chi2m = (resv.array() / errv.array()).sum();
       
       if (chi2m <  getCKFChi2Cut() ) { 
 	filterMeas = true;

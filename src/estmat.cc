@@ -36,7 +36,7 @@ void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   Matrix<FITTERTYPE, 4, 1> offdiag, reverse(dx, dy, x, y);
   offdiag(0) = offdiag(2) = estim->cov(0,2);
   offdiag(1) = offdiag(3) = estim->cov(1,3);
-  estim->params = estim->params.cwise() * estim->cov.diagonal() + offdiag.cwise() * reverse;
+  estim->params = estim->params.array() * estim->cov.diagonal().array() + offdiag.array() * reverse.array();
 
   // estim->params(0) = estim->cov(0,0) * x + estim->cov(0,2) * dx;
   // estim->params(1) = estim->cov(1,1) * y + estim->cov(1,3) * dy;
@@ -110,7 +110,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward[pl];
       mat.getExplicitEstimate(fw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
-      resv = system.getResiduals(meas, fw).cwise().square();
+      resv = system.getResiduals(meas, fw).array().square();
       chi2 += resv[0]/resFWErrorX[pl] + resv[1]/resFWErrorY[pl]; 
     }
 
@@ -121,7 +121,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward[pl];
       mat.getExplicitEstimate(bw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
-      resv = system.getResiduals(meas, bw).cwise().square();
+      resv = system.getResiduals(meas, bw).array().square();
       chi2 += resv[0]/resBWErrorX[pl] + resv[1]/resBWErrorY[pl]; 
     }
   }
@@ -249,10 +249,10 @@ void SDR::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       //Get variance of residuals in x and y
       Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXFW.at(pl - 2) += pull2(0); 
       sqrPullYFW.at(pl - 2) += pull2(1); 
     }
@@ -260,9 +260,9 @@ void SDR::operator() (size_t offset, size_t stride){
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXBW.at(pl) += pull2(0);
       sqrPullYBW.at(pl) += pull2(1);
     }
@@ -288,7 +288,9 @@ void SDR::operator() (size_t offset, size_t stride){
 	//Use doubles, else it fails
 	Eigen::LLT<Matrix4d> tmpChol;
 	tmpChol.compute(tmpCov.cast<double>());
-	tmpChol.matrixL().marked<Eigen::LowerTriangular>().solveTriangularInPlace(tmpDiff);
+	tmpChol.solve(tmpDiff);
+	//tmpChol.matrixL().marked<Eigen::Lower>().solveTriangularInPlace(tmpDiff);
+	// tmpChol.matrixL().trinagularView<Lower>().solveInPlace(tmpDiff);
 	for(size_t param = 0; param < 4; param++){
 	  sqrParams.at(pl -1).at(param) += tmpDiff(param) * tmpDiff(param);
 	}
@@ -380,10 +382,10 @@ void FwBw::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       //Get variance of residuals in x and y
       Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXFW.at(pl - 2) += pull2(0); 
       sqrPullYFW.at(pl - 2) += pull2(1); 
     }
@@ -391,9 +393,9 @@ void FwBw::operator() (size_t offset, size_t stride){
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).cwise().square();
+      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.cwise() / variance;
+      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXBW.at(pl) += pull2(0); 
       sqrPullYBW.at(pl) += pull2(1); 
     }
@@ -712,43 +714,43 @@ void EstMat::plot(char* fname){
   }
 
 
-  cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  for(int ii = 0; ii < 100; ii++){
-    for(int jj = 0; jj < 100; jj++){
-      cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-      cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-      cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-      cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-    }
-  }
+  // cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
+  // for(int ii = 0; ii < 100; ii++){
+  //   for(int jj = 0; jj < 100; jj++){
+  //     cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //     cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
+  //   }
+  // }
 
-  std::cout << "(defparameter *DUMMY*" << endl;
-  std::cout << "(list" << std::endl;
-  std::cout << ":chi2 ";
-  printHisto(chi2);
-  std::cout << ":p-val ";
-  printHisto(pValue);
-  for(size_t ii = 0; ii < system.planes.size(); ii++){
-    std::cout << ":histo" << ii << " ";
-    printHisto(pullX.at(ii));
-  }
+  // std::cout << "(defparameter *DUMMY*" << endl;
+  // std::cout << "(list" << std::endl;
+  // std::cout << ":chi2 ";
+  // printHisto(chi2);
+  // std::cout << ":p-val ";
+  // printHisto(pValue);
+  // for(size_t ii = 0; ii < system.planes.size(); ii++){
+  //   std::cout << ":histo" << ii << " ";
+  //   printHisto(pullX.at(ii));
+  // }
 
-  //Pull means
-  std::cout << ":means (list";
-  for(int ii = 0; ii < pullX.size(); ii++){
-    cout << " " << pullX.at(ii)->GetMean();
-  }
-  cout << endl << ")" << endl;
-  //Pull sigmas
-  std::cout << ":sigmas (list";
-  for(int ii = 0; ii < pullX.size(); ii++){
-    cout << " " << pullX.at(ii)->GetRMS();
-  }
-  cout << endl << ")" << endl;
-  std::cout << "))" << std::endl; //closes list and defparameter
+  // //Pull means
+  // std::cout << ":means (list";
+  // for(int ii = 0; ii < pullX.size(); ii++){
+  //   cout << " " << pullX.at(ii)->GetMean();
+  // }
+  // cout << endl << ")" << endl;
+  // //Pull sigmas
+  // std::cout << ":sigmas (list";
+  // for(int ii = 0; ii < pullX.size(); ii++){
+  //   cout << " " << pullX.at(ii)->GetRMS();
+  // }
+  // cout << endl << ")" << endl;
+  // std::cout << "))" << std::endl; //closes list and defparameter
 
   cout << "Write" << endl;
   tfile->Write();

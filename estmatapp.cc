@@ -61,8 +61,8 @@ void initialGuess(EstMat& mat){
 
   //TEL, set to true values
   for(int ii = 0; ii < mat.system.planes.size(); ii++){
-    mat.resX.at(ii) = mat.resY.at(ii) = 4.3 * 2;
-    mat.radLengths.at(ii) = 0.0073  * 2;
+    mat.resX.at(ii) = mat.resY.at(ii) = 4.3;
+    mat.radLengths.at(ii) = 0.0073;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
   
@@ -70,10 +70,10 @@ void initialGuess(EstMat& mat){
   for(int ii = 3; ii < 6; ii++){
     double gr1(0), gr2(0);
     gaussRand(gr1, gr2);
-    mat.resX.at(ii) = 2 * 15.0 + 3.0 * gr1;
-    mat.resY.at(ii) = 2 * 115.0 + 3.0 * gr2;
+    mat.resX.at(ii) = 15.0 + 3.0 * gr1;
+    mat.resY.at(ii) = 115.0 + 3.0 * gr2;
     gaussRand(gr1, gr2);
-    mat.radLengths.at(ii) = 2 * 0.08 + 0.02 * gr1;
+    mat.radLengths.at(ii) = 0.08 + 0.02 * gr1;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
 }
@@ -143,9 +143,9 @@ int main(int argc, char* argv[]){
     sprintf(name, "rad%i", ii);
     radests.push_back(new TH1D(name, name,100, 0.06, 0.12));
   }
-
+  
   estimationParameters(mat); //Configure which parameters to free in the fit
-
+  
   //For each outeriter, a track sample will be simulated, and the system parameters will be estimated
   for(int outeriter = 0; outeriter < numberOfExperiments; outeriter ++){
     cout << "Outer iteration " << outeriter << endl;
@@ -153,7 +153,7 @@ int main(int argc, char* argv[]){
     simulateTracks(mat, nTracks); //Configure true state in this function
     initialGuess(mat); //Set up initial guesses for material and resolutions, 
     mat.plot( (char*) "test.root");
-    return 0;
+
     //alignment should work with bad resolution and material budget estimates
     if(strcmp(argv[1], "align") == 0){
       prepareAlignment(mat); //Set up initial guesses for alignment parameters

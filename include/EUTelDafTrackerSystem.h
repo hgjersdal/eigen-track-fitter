@@ -7,7 +7,7 @@
 #include <cmath>
 #include <iostream>
 
-USING_PART_OF_NAMESPACE_EIGEN
+using namespace Eigen;
 
 namespace daffitter{
   template <typename T, size_t N>
@@ -20,7 +20,7 @@ namespace daffitter{
       this->params = e->params;
     }
     void print(){
-      if( cov.lu().isInvertible() ){
+      if( cov.fullPivLu().isInvertible() ){
 	std::cout << "Cov: " << "Invertible!" << std::endl;
       } else {
 	std::cout << "Cov: " << "non-inverible! :(" << std::endl;

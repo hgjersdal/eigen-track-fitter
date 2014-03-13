@@ -44,18 +44,99 @@ enum valueBase{
   nNan = 9,
 };
 
+
+//Class for bookkeeping
+class Results{
+  map<int,double> valueMap;
+  map<int,int> counterMap;
+
+  Matrix<double, 4, 4> tmpCov;
+
+public:
+  vector< TrackEstimate<float,4> > truth;
+
+  Results(){
+    valueMap[totWeight] = 0.0f;
+    valueMap[realWeight] = 0.0f;
+    valueMap[fakeWeight] = 0.0f;
+    counterMap[nMeas] = 0;
+    counterMap[nMissed] = 0;
+    counterMap[nEvents] = 0;
+    counterMap[nAccepted] = 0;
+    counterMap[nSuccess] = 0;
+    counterMap[nGhost] = 0;
+    counterMap[nNan] = 0;
+
+    truth.resize(9);
+  }
+
+  void incrementCount(int iden){
+    counterMap[iden]++;
+  }
+  void incrementValue(int iden, double value){
+    valueMap[iden] += value;
+  }
+  int getCount(int iden){
+    return(counterMap[iden]);
+  }
+  double getValue(int iden){
+    return(valueMap[iden]);
+  }
+  double getValueRat(int numerator, int denominator){
+    double val = (getValue(denominator) == 0)? 0 : 100 * getValue(numerator)/ getValue(denominator);
+    return(val);
+  }
+  double getCounterRat(int numerator, int denominator){
+    double val = (getCount(denominator) == 0)? 0 : 100 * getCount(numerator)/ double(getCount(denominator));
+    return(val);
+  }
+  void increment(Results& tmp){
+    boost::mutex::scoped_lock lock(plotGuard);
+    map<int,int>::iterator it1 = tmp.counterMap.begin();
+    for(;it1 != tmp.counterMap.end(); it1++){
+      counterMap[it1->first] += it1->second;
+    }
+
+    map<int,double>::iterator it2 = tmp.valueMap.begin();
+    for(;it2 != tmp.valueMap.end(); it2++){
+      valueMap[it2->first] += it2->second;
+    }
+  }
+  // void updateCovariance(Matrix<float, 4, 1>& params){
+  //   Matrix<double, 4, 1> difference = 
+  // }
+  void printPlist(int noise, const char* hashname){
+    cout << "(setf (gethash " << noise << " " << hashname << ")" << endl << "(list" << endl
+	 << " :nmeas "      << getCount(nMeas) << endl
+	 << " :nmissed "    << getCount(nMissed) << endl
+	 << " :nevents "    << getCount(nEvents) << endl
+	 << " :naccepted "  << getCount(nAccepted) << endl
+	 << " :nsuccess "   << getCount(nSuccess) << endl
+	 << " :nghost "     << getCount(nGhost) << endl
+	 << " :nnan "       << getCount(nNan) << endl
+	 << " :totweight "  << getValue(totWeight) << endl
+	 << " :realweight " << getValue(realWeight) << endl
+	 << " :fakeweight " << getValue(fakeWeight) <<  endl
+	 << " :purity "     << getValueRat(realWeight, totWeight) << endl
+	 << " :missing "    << getCounterRat(nMissed, nMeas) << endl
+	 << " :efficiency " << getCounterRat(nSuccess, nEvents)  << endl
+	 << "))" <<endl;
+  }
+};
+
+
 #include "simfunction.h" 
 
 // Function that analyses an event in simulated data.
 void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measurement<float> > >& simTracks, 
-	     map<int,double> &valueMap,map<int,int> &counterMap, vector< TrackEstimate<float,4> >& truth){
+	     Results &result){
   // Run track finder
 #ifdef CLU
   system.clusterTracker();
 #else
   system.combinatorialKF();
 #endif
-
+  
   int myTrack = -1; //-1 means no track is found.
   double chi2ndof = 1000; 
   double ndofmin = 3.5; //Only look at tracks with 4 or more measurements
@@ -77,108 +158,98 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
     }
   }
   
-  {
-    boost::mutex::scoped_lock lock(plotGuard);
-    counterMap[nEvents]++;
-    if(myTrack == -1){ return;  } // -1 means no track was found
-    TrackCandidate<float, 4>* track =  system.tracks.at(myTrack);
-    //Make a cut in the number of measurements included, and  chi2/ndof
-    if(track->ndof < ndofmin){ return; } 
-    if( (track->chi2 / track->ndof) > system.getChi2OverNdofCut()) { return; }
-    if( isnan(track->chi2 / track->ndof) ){
-      cout << "NAN CHI!" << endl; // Should never happen. If it does, a bug in the weigh calculation is a probable cause
-      exit(2);
-    }
-
-    counterMap[nAccepted]++;
-
-    bool ghost = true;
-    bool nanp = false;
-
-    for(int ii = 0; ii < track->indexes.size(); ii++ ){
+  result.incrementCount(nEvents);
+  if(myTrack == -1){ return;  } // -1 means no track was found
+  TrackCandidate<float, 4>* track =  system.tracks.at(myTrack);
+  //Make a cut in the number of measurements included, and  chi2/ndof
+  if(track->ndof < ndofmin){ return; } 
+  if( (track->chi2 / track->ndof) > system.getChi2OverNdofCut()) { return; }
+  if( isnan(track->chi2 / track->ndof) ){
+    cout << "NAN CHI!" << endl; // Should never happen. If it does, a bug in the weigh calculation is a probable cause
+    exit(2);
+  }
+  
+  result.incrementCount(nAccepted);
+  
+  bool ghost = true;
+  bool nanp = false;
+  
+  for(int ii = 0; ii < track->indexes.size(); ii++ ){
     //Skip planes excluded by model or 
-      if(system.planes.at(ii).isExcluded() ) { continue;}
-      if(track->indexes.at(ii) < 0 ) {continue;}
-      if( system.planes.at(ii).meas.at(track->indexes.at(ii) ).goodRegion()){
-	ghost = false;
-      }
-      if( (track->weights.at(ii).size() > 0) and isnan(track->weights.at(ii).sum()) ){
-	nanp = true;
-      }
+    if(system.planes.at(ii).isExcluded() ) { continue;}
+    if(track->indexes.at(ii) < 0 ) {continue;}
+    if( system.planes.at(ii).meas.at(track->indexes.at(ii) ).goodRegion()){
+      ghost = false;
     }
-    if( nanp ){
-      counterMap[nNan]++;
-      return;
+    if( (track->weights.at(ii).size() > 0) and isnan(track->weights.at(ii).sum()) ){
+      nanp = true;
     }
-    if(ghost){
-      counterMap[nGhost]++;
-      return;
+  }
+  if( nanp ){
+    result.incrementCount(nNan);
+    return;
+  }
+  if(ghost){
+    result.incrementCount(nGhost);
+    return;
+  }
+  //Now we have a good track, that is not a ghost track
+  result.incrementCount(nSuccess);
+  
+  for(int pl = 0; pl < system.planes.size(); pl++){
+    if(system.planes.at(pl).isExcluded()) {continue;}
+    if( track->weights.at(pl).sum() > 1.1){
+      cout << "Larger than 1 weights!!! " << track->weights.at(pl).sum() << endl;
     }
-    //Now we have a good track, that is not a ghost track
-    counterMap[nSuccess]++;
-
-    //weight v chi2
-    Matrix<float, 2, 1> residuals;
-    Matrix<float, 2, 1> reserror;
-
-    for(int pl = 0; pl < system.planes.size(); pl++){
-      if(system.planes.at(pl).isExcluded()) {continue;}
-      if( track->weights.at(pl).sum() > 1.1){
-	cout << "Larger than 1 weights!!! " << track->weights.at(pl).sum() << endl;
-      }
-      if( track->weights.at(pl).sum() < -0.1){
-	cout << "Smaller than 0 weights!!! " << track->weights.at(pl).sum() << endl;
-      }
-      for(int mm = 0; mm < system.planes.at(pl).meas.size(); mm++){
-	bool real = system.planes.at(pl).meas.at(mm).goodRegion();
-	bool included = ( mm == track->indexes.at(pl) );
+    if( track->weights.at(pl).sum() < -0.1){
+      cout << "Smaller than 0 weights!!! " << track->weights.at(pl).sum() << endl;
+    }
+    for(int mm = 0; mm < system.planes.at(pl).meas.size(); mm++){
+      bool real = system.planes.at(pl).meas.at(mm).goodRegion();
+      bool included = ( mm == track->indexes.at(pl) );
 #ifdef DAF
-	float weight = track->weights.at(pl)(mm);
+      float weight = track->weights.at(pl)(mm);
 #else 
-	float weight = 0.0f;
-	if( included ){ weight = 1.0f;}
+      float weight = 0.0f;
+      if( included ){ weight = 1.0f;}
 #endif
-	if( isnan(weight)){
-	  cout << weight << ", " << pl << ", " << mm << ", " << counterMap[nEvents] << endl;;
-	  cout << "ndof: " << track->ndof << endl;
-	  counterMap[nNan]++;
-	  counterMap[nSuccess]--;
-	  return;
+      if( isnan(weight)){
+	cout << weight << ", " << pl << ", " << mm << ", " << result.getCount(nEvents) << endl;;
+	cout << "ndof: " << track->ndof << endl;
+	exit(3);
+      }
+      result.incrementValue(totWeight, weight);
+      if(real){
+	result.incrementValue(realWeight,weight);
+	result.incrementCount(nMeas);
+	if( not included ){
+	  result.incrementCount(nMissed);
 	}
-	valueMap[totWeight] += weight;
-	if(real){
-	  valueMap[realWeight] += weight;
-	  counterMap[nMeas]++;
-	  if( not included ){
-	    counterMap[nMissed]++;
-	  }
-	} else {
-	  valueMap[fakeWeight] += weight;
-	}
+      } else {
+	result.incrementValue(fakeWeight,weight);
       }
     }
   }
 }
 
-
 //Function that performs 1/nThread of the simulation + analysis
-void job(TrackerSystem<float,4>* bigSys, map<int, double>* valueMap,
-	 map<int, int>* counterMap, int nTracks, int nNoise, float efficiency){
+void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoise, float efficiency){
 
   //Copy trackersystem to avoid problems with concurrency
   TrackerSystem<float,4> system((*bigSys));
-
+  
   //The simulated measurements are stored here
   std::vector< std::vector<Measurement<float> > > simTracks;
   //The true states of the simulated particle is stored here
-  vector< TrackEstimate<float,4> > truth;
-  truth.resize(9);//One state per plane
-
+  
+  //Write to result 2 to avoid mutex locking the analysis
+  Results tmp;
+  
   for(int event = 0; event < nTracks ;event++){
     simTracks.clear();
     system.clear();
     
-    simulate(system, simTracks, efficiency, truth);
+    simulate(system, simTracks, efficiency, tmp.truth);
     //Add nNoise noise hits per plane
     for(size_t pl = 0; pl < system.planes.size(); pl++){
       boost::mutex::scoped_lock lock(randGuard);
@@ -190,8 +261,9 @@ void job(TrackerSystem<float,4>* bigSys, map<int, double>* valueMap,
       //Shuffle the measurement vector to avoid any systematic advantages for the track finder.
       random_shuffle( system.planes.at(pl).meas.begin(), system.planes.at(pl).meas.begin());
     }
-    analyze(system, simTracks, (*valueMap), (*counterMap), truth);
+    analyze(system, simTracks, tmp);
   }
+  result->increment(tmp);
 }
 
 int main(){
@@ -199,10 +271,6 @@ int main(){
   double ebeam = 100.0;
   int nPlanes = 9;
   
-  //Initialize counters
-  map<int, double> valueMap;
-  map<int, int> counterMap;
-
   TrackerSystem<float,4> system;
   //Configure track finder, these cuts are in place to let everything pass
   system.setChi2OverNdofCut( 6.0f); //Chi2 / ndof cut for the combinatorial KF to accept the track
@@ -273,47 +341,17 @@ int main(){
 
     //Reset counters
     for(int noise = 0; noise < 21; noise ++){  
-      valueMap[totWeight] = 0.0f;
-      valueMap[realWeight] = 0.0f;
-      valueMap[fakeWeight] = 0.0f;
-      
-      counterMap[nMeas] = 0;
-      counterMap[nMissed] = 0;
-      counterMap[nEvents] = 0;
-      counterMap[nAccepted] = 0;
-      counterMap[nSuccess] = 0;
-      counterMap[nGhost] = 0;
-      counterMap[nNan] = 0;
-      
+      Results result;
       //Start simulation + analysis job
       std::vector< std::vector<Measurement<float> > > simTracks;
       boost::thread_group threads;
       for(int ii = 0; ii < nThreads; ii++){
-	threads.create_thread( boost::bind(job, &system, &valueMap, &counterMap, nTracks / nThreads, noise, efficiency));
+	threads.create_thread( boost::bind(job, &system, &result, nTracks / nThreads, noise, efficiency));
       }
       threads.join_all();
       
-      //Avoid divide by zero. 0 is returned if no data is available.
-      double purity = (valueMap[totWeight] == 0) ? 0 : 100.0 * valueMap[realWeight] / valueMap[totWeight];
-      double missingp = (counterMap[nMeas] == 0)? 0 : 100.0 * counterMap[nMissed] / counterMap[nMeas];
-      double effi = (counterMap[nEvents] == 0)? 0 : 100.0 * counterMap[nSuccess] / counterMap[nEvents];
-      
       //Write results as lisp
-      cout << "(setf (gethash " << noise << " " << hashname << ")" << endl << "(list" << endl
-	   << " :nmeas " << counterMap[nMeas] << endl
-	   << " :nmissed " << counterMap[nMissed] << endl
-	   << " :nevents " << counterMap[nEvents] << endl
-	   << " :naccepted " << counterMap[nAccepted] << endl
-	   << " :nsuccess " << counterMap[nSuccess] << endl
-	   << " :nghost " << counterMap[nGhost] << endl
-	   << " :nnan " << counterMap[nNan] << endl
-	   << " :totweight " << valueMap[totWeight] << endl
-	   << " :realweight " << valueMap[realWeight] << endl
-	   << " :fakeweight " << valueMap[fakeWeight] <<  endl
-	   << " :purity " << purity << endl
-	   << " :missing " << missingp << endl
-	   << " :efficiency " << effi  << endl
-	   << "))" <<endl;
+      result.printPlist(noise, hashname);
     }
   }
   //Print the algorithm type

@@ -1,6 +1,5 @@
 #include "EUTelDafTrackerSystem.h"
 #include <Eigen/Core>
-#include <Eigen/Array>
 #include <Eigen/Geometry> 
 #include <Eigen/LU>
 #include <Eigen/Cholesky>
@@ -39,14 +38,10 @@ void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,
   //Get the value exp( -chi2 / 2t) for each measurement
   for(size_t m = 0; m < nMeas ; m++){
     const Measurement<T> &meas = plane.meas[m];
-    resids = e->params.start(2) - meas.getM();
-    chi2s = resids.cwise().square();
+    resids = e->params.head(2) - meas.getM();
+    chi2s = resids.array().square();
     chi2s(0) /= plane.getSigmaX() * plane.getSigmaX() + e->cov(0,0);
     chi2s(1) /= plane.getSigmaY() * plane.getSigmaY() + e->cov(1,1);
-    //cout << "resids " << endl << resids << endl << endl;
-    //cout << "chi2s " << endl << chi2s << endl << endl;
-    //resids = plane.getVars() + Matrix<T, 2, 1>( e->cov(0,0), e->cov(1,1) );
-    //chi2s = chi2s.cwise() / resids;
     T chi2 = chi2s.sum();
     weights(m) = exp( -1 * chi2 / (2 * tval));
     //if(isnan(plane.weights(m))){exit(1);}
@@ -116,7 +111,7 @@ namespace daffitter{
     e->cov(2,2) += dz * c02 + dz * e->cov(0,2);
     e->cov(3,3) += dz * c13 + dz * e->cov(1,3);
     
-    //Weigt vector becomes
+    //Information vector becomes
     e->params(2) += dz * e->params(0);
     e->params(3) += dz * e->params(1);
   }
@@ -128,10 +123,10 @@ namespace daffitter{
     const Measurement<T>& m = pl.meas[index];
     //Weight matrix:
     //C = C + H'GH, with diagonal G
-    e->cov.diagonal().start(2) += pl.invMeasVar;
+    e->cov.diagonal().head(2) += pl.invMeasVar;
     //Information vector update
     // x = x + H'G M
-    e->params.start(2) += m.getM().cwise() * pl.invMeasVar;
+    e->params.head(2).array() += m.getM().array() * pl.invMeasVar.array();
   }
   
   template <typename T, size_t N>
@@ -140,13 +135,13 @@ namespace daffitter{
     if(pl.isExcluded()) { return;}
     //Weight matrix:
     //C = C + H'GH
-    e->cov.diagonal().start(2) += pl.invMeasVar * pl.getTotWeight();
+    e->cov.diagonal().head(2) += pl.invMeasVar * pl.getTotWeight();
     
     //weight vector update
     // x = x + H'G M
     double nMeas = pl.meas.size();
     for(size_t ii = 0 ; ii < nMeas; ii++){
-      e->params.start(2) += weights(ii) * (pl.meas[ii].getM().cwise() * pl.invMeasVar);
+      e->params.head(2) += weights(ii) * (pl.meas[ii].getM().array() * pl.invMeasVar);
     }
   }
   
@@ -220,7 +215,7 @@ void EigenFitter<T,N>::kfUpdate(const FitPlane<T>  &pl, int index, TrackEstimate
   getKFGain(pl,e);
   //Update state
   // m - Hx
-  resids = m.getM() - e->params.start(2);
+  resids = m.getM() - e->params.head(2);
   // K ( m - Hx)
   tmpState1 = kalmanGain * resids;
   //m + K( m - Hx)

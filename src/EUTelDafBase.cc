@@ -282,10 +282,6 @@ void EUTelDafBase::getPlaneNorm(daffitter::FitPlane<float>& pl){
   Matrix<float, 3, 1> l2 = pl.getRef2() - pl.getRef0();
   //Calculate plane normal vector from ref points
   pl.setPlaneNorm( l2.cross(l1));
-  // cout << "Ref0 " << endl << pl.getRef0() << endl;
-  // cout << "Norm vec " << endl << pl.getPlaneNorm() << endl;
-  // cout << "Norm dot r0 - r1 " << pl.getPlaneNorm().dot(pl .getRef1() - pl.getRef0()) << endl;
-  // cout << "Norm dot r2 - r0 " << pl.getPlaneNorm().dot(pl.getRef2() - pl.getRef0()) << endl;
 }
 
 void EUTelDafBase::init() {
