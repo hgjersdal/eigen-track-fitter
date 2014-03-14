@@ -31,6 +31,8 @@ Simnple application og the straight line track fitter.
 Results are printed to lisp code
 */
 
+
+//Enum for counters
 enum valueBase{
   nMeas = 0,
   nMissed = 1,
@@ -38,6 +40,7 @@ enum valueBase{
   nAccepted = 3,
   nSuccess = 4,
   nGhost = 5,
+  nAdditionalGhosts = 15,
   totWeight = 6,
   realWeight = 7,
   fakeWeight = 8,
@@ -47,15 +50,16 @@ enum valueBase{
 
 //Class for bookkeeping
 class Results{
-  map<int,double> valueMap;
-  map<int,int> counterMap;
+  map<int,int> counterMap; //Keep track of simple counters.
+  map<int,double> valueMap; //Keep track of values that are not simple counters. i.e. weights.
 
-  Matrix<double, 4, 4> tmpCov;
+  Matrix<double, 4, 4> tmpCov; //Used to obtain determinant of empirical covariance of the parameter residuals
 
 public:
-  vector< TrackEstimate<float,4> > truth;
+  vector< TrackEstimate<float,4> > truth; //The true state of the track, one per plane.
 
-  Results(){
+  Results(){ 
+    //Initialize counters.
     valueMap[totWeight] = 0.0f;
     valueMap[realWeight] = 0.0f;
     valueMap[fakeWeight] = 0.0f;
@@ -65,47 +69,83 @@ public:
     counterMap[nAccepted] = 0;
     counterMap[nSuccess] = 0;
     counterMap[nGhost] = 0;
+    counterMap[nAdditionalGhosts] = 0;
     counterMap[nNan] = 0;
 
+    //Prepare for covariance calculation
+    tmpCov.setZero();
+
+    //Prepare for 9 planes
     truth.resize(9);
   }
 
-  void incrementCount(int iden){
+  void incrementCount(int iden){ 
+    //Increment a counter
     counterMap[iden]++;
   }
-  void incrementValue(int iden, double value){
+  void incrementValue(int iden, double value){ 
+    //Increment a value counter
     valueMap[iden] += value;
   }
-  int getCount(int iden){
+  int getCount(int iden){ 
+    //Get a count
     return(counterMap[iden]);
   }
-  double getValue(int iden){
+  double getValue(int iden){ 
+    //Get a value count
     return(valueMap[iden]);
   }
-  double getValueRat(int numerator, int denominator){
+  double getValuePercentage(int numerator, int denominator){ 
+    //Get a percentage, avoid divide by 0. Divide by 0 returns 0.
     double val = (getValue(denominator) == 0)? 0 : 100 * getValue(numerator)/ getValue(denominator);
     return(val);
   }
-  double getCounterRat(int numerator, int denominator){
+  double getCounterPercentage(int numerator, int denominator){ 
+    //Get a percentage, avoid divide by 0. Divide by 0 returns 0.
     double val = (getCount(denominator) == 0)? 0 : 100 * getCount(numerator)/ double(getCount(denominator));
     return(val);
   }
   void increment(Results& tmp){
+    //Increment the master result with the thread result
+    //Mutex to avoid collisions
     boost::mutex::scoped_lock lock(plotGuard);
+    //Counters
     map<int,int>::iterator it1 = tmp.counterMap.begin();
     for(;it1 != tmp.counterMap.end(); it1++){
       counterMap[it1->first] += it1->second;
     }
-
+    //Value counters
     map<int,double>::iterator it2 = tmp.valueMap.begin();
     for(;it2 != tmp.valueMap.end(); it2++){
       valueMap[it2->first] += it2->second;
     }
+    //Covariance
+    tmpCov += tmp.tmpCov;
   }
-  // void updateCovariance(Matrix<float, 4, 1>& params){
-  //   Matrix<double, 4, 1> difference = 
-  // }
+  void updateCovariance(Matrix<float, 4, 1>& params, int pl){
+    //Increment the covariance matrix. Assumes that the expectation value is 0 for all
+    //parameters.
+    Matrix<double, 4, 1> difference = params.cast<double>() - truth.at(pl).params.cast<double>();
+    for(int ii = 0; ii < 4; ii++){
+      for(int jj = 0; jj < 4; jj++){
+	tmpCov(ii,jj) += difference(ii) * difference(jj);
+      }
+    }
+  }
+  double getGeneralizedVariance(){
+    //Get the generalized variance. 
+    //Get the covariance matrix
+    tmpCov.array() /= double(getCount(nSuccess));
+    //Return the determinant
+    if( getCount(nSuccess) == 0 ){
+      0.0;
+    } else {
+      return(tmpCov.determinant());
+    }
+  }
   void printPlist(int noise, const char* hashname){
+    //Print results to lisp
+    // Insert a propertylist into a hashtable.
     cout << "(setf (gethash " << noise << " " << hashname << ")" << endl << "(list" << endl
 	 << " :nmeas "      << getCount(nMeas) << endl
 	 << " :nmissed "    << getCount(nMissed) << endl
@@ -113,13 +153,15 @@ public:
 	 << " :naccepted "  << getCount(nAccepted) << endl
 	 << " :nsuccess "   << getCount(nSuccess) << endl
 	 << " :nghost "     << getCount(nGhost) << endl
+	 << " :nghostadditional "     << getCount(nAdditionalGhosts) << endl
 	 << " :nnan "       << getCount(nNan) << endl
 	 << " :totweight "  << getValue(totWeight) << endl
 	 << " :realweight " << getValue(realWeight) << endl
 	 << " :fakeweight " << getValue(fakeWeight) <<  endl
-	 << " :purity "     << getValueRat(realWeight, totWeight) << endl
-	 << " :missing "    << getCounterRat(nMissed, nMeas) << endl
-	 << " :efficiency " << getCounterRat(nSuccess, nEvents)  << endl
+	 << " :purity "     << getValuePercentage(realWeight, totWeight) << endl
+	 << " :missing "    << getCounterPercentage(nMissed, nMeas) << endl
+	 << " :efficiency " << getCounterPercentage(nSuccess, nEvents)  << endl
+	 << " :genvar " << getGeneralizedVariance()  << endl
 	 << "))" <<endl;
   }
 };
@@ -173,11 +215,26 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   
   bool ghost = true;
   bool nanp = false;
+
+  float tmptotweight = 0.0f;
+  float tmpfakeweight = 0.0f;
   
   for(int ii = 0; ii < track->indexes.size(); ii++ ){
     //Skip planes excluded by model or 
     if(system.planes.at(ii).isExcluded() ) { continue;}
     if(track->indexes.at(ii) < 0 ) {continue;}
+    for(int mm = 0; mm < system.planes.at(ii).meas.size(); mm++){
+      bool real = system.planes.at(ii).meas.at(mm).goodRegion();
+      bool included = ( mm == track->indexes.at(ii) );
+#ifdef DAF
+      float weight = track->weights.at(ii)(mm);
+#else 
+      float weight = 0.0f;
+      if( included ){ weight = 1.0f;}
+#endif
+      tmptotweight += weight;
+      if(not real){ tmpfakeweight += weight; }
+    }
     if( system.planes.at(ii).meas.at(track->indexes.at(ii) ).goodRegion()){
       ghost = false;
     }
@@ -193,9 +250,16 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
     result.incrementCount(nGhost);
     return;
   }
+  if( tmpfakeweight > tmptotweight * 0.5){
+    result.incrementCount(nGhost);
+    return;
+  }
   //Now we have a good track, that is not a ghost track
   result.incrementCount(nSuccess);
-  
+  result.updateCovariance(track->estimates.at(3)->params, 3);
+
+  float planeWeight =0.0f;
+  float planeFakeWeight = 0.0f;
   for(int pl = 0; pl < system.planes.size(); pl++){
     if(system.planes.at(pl).isExcluded()) {continue;}
     if( track->weights.at(pl).sum() > 1.1){
@@ -219,6 +283,7 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
 	exit(3);
       }
       result.incrementValue(totWeight, weight);
+      planeWeight += weight;
       if(real){
 	result.incrementValue(realWeight,weight);
 	result.incrementCount(nMeas);
@@ -227,8 +292,12 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
 	}
       } else {
 	result.incrementValue(fakeWeight,weight);
+	planeFakeWeight += weight;
       }
     }
+  }
+  if(planeFakeWeight > 0.5 * planeWeight ){
+    result.incrementCount(nAdditionalGhosts);
   }
 }
 
@@ -308,16 +377,16 @@ int main(){
 #else
   float chi2cut = 0.0;
 #endif
-  float ckfcut = 5;
+  float ckfcut = 6;
   int radius = 0;
 
   //Scan cut parameter for selected method
 #ifdef CLU
-  for(radius = 110; radius < 200; radius += 5)
+  for(radius = 60; radius < 200; radius += 5)
 #elif defined DAF
-  for(chi2cut = 5; chi2cut < 20 ; chi2cut += 0.5)
+  for(chi2cut = 1; chi2cut < 20 ; chi2cut += 0.5)
 #else
-  for(ckfcut = 5; ckfcut < 20 ; ckfcut += 0.5)
+  for(ckfcut = 1; ckfcut < 20 ; ckfcut += 0.5)
 #endif
   {
     //Prepare lisp output to be analyzed elsewhere.
@@ -340,7 +409,7 @@ int main(){
     cout << ";;;radius: "   << radius << endl;
 
     //Reset counters
-    for(int noise = 0; noise < 21; noise ++){  
+    for(int noise = 0; noise < 21; noise ++){
       Results result;
       //Start simulation + analysis job
       std::vector< std::vector<Measurement<float> > > simTracks;

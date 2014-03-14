@@ -23,8 +23,17 @@ simple: simple.cc
 multitrack: multitrack.cc
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
 
-noisesim: noisesim.cc
-	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
-
 estmat: estmatapp.cc ./src/estmat.cc 
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
+
+.PHONY: noisesim
+noisesim: noisesimkf noisesimdaf noisesimclu
+
+noisesimkf:  noisesim.cc
+	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
+
+noisesimdaf:  noisesim.cc
+	$(LD) $(LDFLAGS) $(CXXFLAGS) -DDAF $(LIBS) -o $@ $^ 
+
+noisesimclu:  noisesim.cc
+	$(LD) $(LDFLAGS) $(CXXFLAGS) -DCLU $(LIBS) -o $@ $^ 

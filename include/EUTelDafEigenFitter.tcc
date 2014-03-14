@@ -141,7 +141,7 @@ namespace daffitter{
     // x = x + H'G M
     double nMeas = pl.meas.size();
     for(size_t ii = 0 ; ii < nMeas; ii++){
-      e->params.head(2) += weights(ii) * (pl.meas[ii].getM().array() * pl.invMeasVar);
+      e->params.head(2).array() += weights(ii) * (pl.meas[ii].getM().array() * pl.invMeasVar.array());
     }
   }
   
