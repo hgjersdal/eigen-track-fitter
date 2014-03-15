@@ -1,4 +1,4 @@
-#eigen3-track-fitter
+#eigen-track-fitter
 
 A straight line track fitter for test beam analysis of pixel partickle detectors.
 
