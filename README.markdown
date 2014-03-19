@@ -10,6 +10,18 @@ Also contains an implementation of the methods for estimating material and resol
 
 Code for using the fitter and material estimator from the EUTELESCOPE software framework is also included.
 
+##Implementation
+
+The core Kalman filter is implemented in `include/EUTelDafEigenFitter.tcc`.
+
+Full track fitters, as well as pattern recognition algorithms are in `include/EUTelDafTrackerSystem.tcc` and `include/EUTelDafTrackerSystem.h`.
+
+The material and resolution estimation methods are implemented in `include/estmat.h` and `src/estmat.cc`.
+
+The code can be interfaced from the EUTelescope framework with the classes implemented in `src/EUTelDaf*`. These interfaces might not be up to date, as I have not used the framework in a while.
+
+`estmatapp.cc`, `noisesim.cc` and `simple.cc` set up and run simple simulation experiments for validating the implementations.
+
 ##Dependencies
 
 The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen3. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading.

@@ -95,6 +95,7 @@ int main(){
   //Add planes to the tracker system
   float scattertheta = getScatterSigma(ebeam,.1);  
   float scattervar = scattertheta * scattertheta;
+
   system.addPlane(0, 10    , 4.3f, 4.3f, scattervar,  false);
   system.addPlane(1, 150010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(2, 300010, 4.3f, 4.3f,  scattervar, false);
@@ -104,6 +105,7 @@ int main(){
   system.addPlane(6, 680010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(7, 830010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(8, 980010, 4.3f, 4.3f,  scattervar, false);
+
   system.init();
   
   int nTracks = 1000000; //Number of tracks to be simulated
@@ -132,11 +134,11 @@ int main(){
       dx += g1 * getScatterSigma(ebeam, 0.1);
       dy += g2 * getScatterSigma(ebeam, 0.1);
       gaussRand(g1, g2);
+      
       //Add a measurement to the tracker system at plane pl
       system.addMeasurement(pl, x + g1 * 4.3f, y + g2 * 4.3f, system.planes.at(pl).getZpos(), true, pl);
-      //cout << "pl " << pl << " x: " << x + g1 * 4.3f << " y: " << y + g2 * 4.3f << endl;
     }
-
+    
     //Track finder
     system.combinatorialKF();
     //Loop over track candidates
