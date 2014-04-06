@@ -82,8 +82,8 @@ void EigenFitter<T,N>::addScatteringInfo(const FitPlane<T>& pl, TrackEstimate<T,
   e->cov(1,1) -= c31 * c31 * scattervar3; 
   e->cov(1,3) -= c31 * c33 * scattervar3; 
   e->cov(2,2) -= c22 * c22 * scattervar2; 
-  e->cov(2,0) = e->cov(0,2);
   e->cov(3,3) -= c33 * c33 * scattervar3; 
+  e->cov(2,0) = e->cov(0,2);
   e->cov(3,1) = e->cov(1,3);
 
   T p2 = e->params(2);

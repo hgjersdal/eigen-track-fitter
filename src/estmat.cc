@@ -28,6 +28,21 @@ void EstMat::readTrack(int track, TrackerSystem<FITTERTYPE, 4>& system){
   }
 }
 
+void EstMat::readTracksToArray(float** measX, float** measY, int nTracks, int nPlanes){
+  if(nTracks > tracks.size()){
+    throw runtime_error("Trying to read too many tracks!");
+  }
+  for(int tr = 0; tr < nTracks; tr++){
+    if(tracks.at(tr).size() != 9 or nPlanes != 9){
+      throw runtime_error("SDR2CL currently needs exactly nine measurements in all the tracks.");
+    }
+    for(int pl = 0; pl < nPlanes; pl++){
+      measX[pl][tr] = tracks.at(tr).at(pl).getX();
+      measY[pl][tr] = tracks.at(tr).at(pl).getY();
+    }
+  }
+}
+
 void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   //Get the explicit estimates
   fastInvert(estim->cov);
@@ -228,7 +243,7 @@ void SDR::operator() (size_t offset, size_t stride){
     system.clear();
     mat.readTrack(track, system);
     
-      //Only one track! Skip track finder
+    //Only one track! Skip track finder
     size_t ii = 0;
     //Run FW fitter, get p-values
     system.fitInfoFWBiased(system.tracks.at(ii));
@@ -421,7 +436,7 @@ void FwBw::operator() (size_t offset, size_t stride){
 }
 
 void Minimizer::init(){
-  //Initialize 4 threads
+  //Initialize nThread threads
 #ifndef DOTHREAD
   cout << "Not using threads!" << endl;
   nThreads = 1;
@@ -499,13 +514,14 @@ void EstMat::simulate(int nTracks){
       sigmas(0) = resX.at(pl);
       sigmas(1) = resY.at(pl);
       if( pl == 3 or pl == 4 or pl == 5){
-	// double posX = x + (normRand() - 0.5) * 50;
-	// double posY = y + (normRand() - 0.5) * 400;
-	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
-	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
+      	// double posX = x + (normRand() - 0.5) * 50;
+      	// double posY = y + (normRand() - 0.5) * 400;
+      	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
+      	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
       } else {
-	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
+      	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
       }
+      
     }
     addTrack(simTrack);
   }

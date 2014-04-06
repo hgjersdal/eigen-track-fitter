@@ -23,8 +23,8 @@ simple: simple.cc
 multitrack: multitrack.cc
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
 
-estmat: estmatapp.cc ./src/estmat.cc 
-	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
+estmat: estmatapp.cc ./src/estmat.cc ./src/sdr2clt3.cpp
+	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -lOpenCL -o $@ $^ 
 
 .PHONY: noisesim
 noisesim: noisesimkf noisesimdaf noisesimclu

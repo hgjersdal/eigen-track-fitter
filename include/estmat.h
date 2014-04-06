@@ -1,3 +1,6 @@
+#ifndef ESTMAT_H
+#define ESTMAT_H
+
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -87,6 +90,7 @@ public:
   
   int itMax;
   void readTrack(int track, TrackerSystem<FITTERTYPE,4>& system);
+  void readTracksToArray(float** measX, float** measY, int nTracks, int nPlanes);
   void clear(){ tracks.clear(); }
   void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim);
   void printParams( char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString);
@@ -153,3 +157,5 @@ public:
   virtual void operator() (size_t offset, size_t stride);
   virtual bool twoRetVals() { return(true);}
 };
+
+#endif
