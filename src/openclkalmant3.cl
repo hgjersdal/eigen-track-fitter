@@ -129,8 +129,9 @@ __kernel void processFirstPlaneFW(__global float* measX, __global float* measY,
 				 __private float varX, __private float varY, 
 				 __private float invScatterVar, __private float dz){
   int gid = get_global_id(0);
-  //Start with parameters x, dx.
-  estimate e = {x[gid], dx[gid], xx[gid], xdx[gid], dxdx[gid]};
+  //Start with parameters x, dx. Set them all to 0;
+  //estimate e = {x[gid], dx[gid], xx[gid], xdx[gid], dxdx[gid]};
+  estimate e = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   float meas = measX[gid];
   update(&e,meas, 1.0f/varX);
   addScatter(&e, invScatterVar);
@@ -138,8 +139,10 @@ __kernel void processFirstPlaneFW(__global float* measX, __global float* measY,
   xx[gid]   = e.xx;  xdx[gid]  = e.xdx;  dxdx[gid] = e.dxdx;
   
   //Then do y, dy
-  e.x = y[gid];   e.dx = dy[gid];  
-  e.xx = yy[gid];  e.xdx = ydy[gid];  e.dxdx = dydy[gid];  
+  //e.x = y[gid];   e.dx = dy[gid];  
+  //e.xx = yy[gid];  e.xdx = ydy[gid];  e.dxdx = dydy[gid];  
+  e.x = 0.0f;   e.dx = 0.0f;  
+  e.xx = 0.0f;  0.0f; e.xdx = 0.0f;  e.dxdx = 0.0f;  
   meas = measY[gid];
   update(&e,meas, 1.0f/varY);
   addScatter(&e, invScatterVar);
@@ -232,15 +235,18 @@ __kernel void processFirstPlaneBW(__global float* measX, __global float* measY,
 				  __private float invScatterVar, __private float dz){
   int gid = get_global_id(0);
   //Start with parameters x, dx.
-  estimate e = {x[gid], dx[gid], xx[gid], xdx[gid], dxdx[gid]};
+  //estimate e = {x[gid], dx[gid], xx[gid], xdx[gid], dxdx[gid]};
+  estimate e = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   float meas = measX[gid];
   update(&e,meas, 1.0f/varX);
   x[gid]    = e.x;  dx[gid]   = e.dx;
   xx[gid]   = e.xx;  xdx[gid]  = e.xdx;  dxdx[gid] = e.dxdx;
   
   //Then do y, dy
-  e.x = y[gid];   e.dx = dy[gid];  
-  e.xx = yy[gid];  e.xdx = ydy[gid];  e.dxdx = dydy[gid];  
+  //e.x = y[gid];   e.dx = dy[gid];  
+  //e.xx = yy[gid];  e.xdx = ydy[gid];  e.dxdx = dydy[gid];  
+  e.x = 0.0f;   e.dx = 0.0f;  
+  e.xx = 0.0f;  0.0f; e.xdx = 0.0f;  e.dxdx = 0.0f;  
   meas = measY[gid];
   update(&e,meas, 1.0f/varY);
   y[gid]    = e.x;   dy[gid]   = e.dx;

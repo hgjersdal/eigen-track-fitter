@@ -85,18 +85,8 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
     measX[ii] = (float*) malloc(nTracks * sizeof(float));
     measY[ii] = (float*) malloc(nTracks * sizeof(float));
   }
-  x    = (float*) malloc(nTracks * sizeof(float));
-  dx   = (float*) malloc(nTracks * sizeof(float));
-  xx   = (float*) malloc(nTracks * sizeof(float));
-  xdx  = (float*) malloc(nTracks * sizeof(float));
-  dxdx = (float*) malloc(nTracks * sizeof(float));
-  chi2x= (float*) malloc(nTracks * sizeof(float));
 
-  y    = (float*) malloc(nTracks * sizeof(float));
-  dy   = (float*) malloc(nTracks * sizeof(float));
-  yy   = (float*) malloc(nTracks * sizeof(float));
-  ydy  = (float*) malloc(nTracks * sizeof(float));
-  dydy = (float*) malloc(nTracks * sizeof(float));
+  chi2x= (float*) malloc(nTracks * sizeof(float));
   chi2y= (float*) malloc(nTracks * sizeof(float));
 }
 void SDR2CL::init(){
@@ -171,7 +161,7 @@ void SDR2CL::runKernel(cl::Kernel& kernel, float resx, float resy, float scatter
 void SDR2CL::operator() (size_t offset, size_t /*stride*/){
   if(offset!=0) {return;} //Force a single host, discard stride
   //Forward fit
-  prepareForFit();
+  //prepareForFit();
   copyMeasurements(measX[0], measY[0]);
   runKernel(firstFW, mat.resX.at(0), mat.resY.at(0),
 	    mat.system.planes.at(0).getScatterThetaSqr(),
@@ -200,26 +190,39 @@ void SDR2CL::operator() (size_t offset, size_t /*stride*/){
     result += rsx * rsx;
     result += rsy * rsy;
   }
-
-  prepareForFit();
+  
+  //prepareForFit();
   int pl = nPlanes - 1;
   copyMeasurements(measX[pl], measY[pl]);
-  runKernel(firstFW, mat.resX.at(pl), mat.resY.at(pl),
+  runKernel(firstBW, mat.resX.at(pl), mat.resY.at(pl),
 	    mat.system.planes.at(pl).getScatterThetaSqr(),
 	    0.0f);
 
   pl = nPlanes - 2;
   copyMeasurements(measX[pl], measY[pl]);
-  runKernel(secondFW, mat.resX.at(pl), mat.resY.at(pl),
+  runKernel(secondBW, mat.resX.at(pl), mat.resY.at(pl),
 	    mat.system.planes.at(pl).getScatterThetaSqr(),
 	    mat.zPos[pl] - mat.zPos[pl+1]);
 
   for(int pl = nPlanes -3; pl >= 0; pl--){
     copyMeasurements(measX[pl], measY[pl]);
-    runKernel(secondFW, mat.resX.at(pl), mat.resY.at(pl),
+    runKernel(restBW, mat.resX.at(pl), mat.resY.at(pl),
 	      mat.system.planes.at(pl).getScatterThetaSqr(),
 	      mat.zPos[pl] - mat.zPos[pl+1]);
     //Process chi2s
+    queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nTracks * sizeof(float), chi2x);
+    queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nTracks * sizeof(float), chi2y);
+    float countx = 0.0f;
+    float county = 0.0f;
+    //Reduction must be serial?
+    for(int ii= 0; ii < nTracks; ii++){
+      countx += chi2x[ii];
+      county += chi2y[ii];
+    }
+    float rsx = 1.0f - countx /nTracks;
+    float rsy = 1.0f - county /nTracks;
+    result += rsx * rsx;
+    result += rsy * rsy;
   }
 }
 
@@ -230,16 +233,16 @@ SDR2CL::~SDR2CL(){
   }
   free(measX);
   free(measY);
-  free(x);
-  free(dx);
-  free(xx);
-  free(xdx);
-  free(dxdx);
+  // free(x);
+  // free(dx);
+  // free(xx);
+  // free(xdx);
+  // free(dxdx);
   free(chi2x);
-  free(y);
-  free(dy);
-  free(yy);
-  free(ydy);
-  free(dydy);
+  // free(y);
+  // free(dy);
+  // free(yy);
+  // free(ydy);
+  // free(dydy);
   free(chi2y);
 }
