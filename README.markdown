@@ -16,7 +16,7 @@ The core Kalman filter is implemented in `include/EUTelDafEigenFitter.tcc`.
 
 Full track fitters, as well as pattern recognition algorithms are in `include/EUTelDafTrackerSystem.tcc` and `include/EUTelDafTrackerSystem.h`.
 
-The material and resolution estimation methods are implemented in `include/estmat.h` and `src/estmat.cc`.
+The material and resolution estimation methods are implemented in `include/estmat.h` and `src/estmat.cc`. An implementation of the "SDR2" method for material and resolution estimation has been made using openCL. The openCL kernel is in `include/openclkalmant5.cl`, the host code is in `src/sdr2clt3.cpp` and `include/sdr2clt3.h`.
 
 The code can be interfaced from the EUTelescope framework with the classes implemented in `src/EUTelDaf*`. These interfaces might not be up to date, as I have not used the framework in a while.
 
@@ -24,7 +24,7 @@ The code can be interfaced from the EUTelescope framework with the classes imple
 
 ##Dependencies
 
-The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen3. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading.
+The track fitter(EUTelTrackerSystem, EUTelDafEigenFitter) depends on the linear algebra package eigen3. The material and resolution estimator relies on the GNU scientific library for minimization and boost_threads for threading if DOTHREADS is defined. Marlin does not include boost, so changing the build environment is needed if one wants threading. One of the material and resolution estimators depend on openCL. 
 
 The simulation experiments use root for plotting.
 
@@ -36,9 +36,9 @@ will simulate 1M tracks, and refit them with CKF + DAF. Residuals and chi2 is pl
 
 	   make estmat
 	   ./estmat <option>
-where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr3`, `hybr` or `align`.
+where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr2cl`, `sdr3`, `hybr` or `align`.
 
-This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads.
+This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads. The `sdr2cl` method needs a GPU that can run the openCL kernel. The `sdr3` and `hybr` methods give the best estimates.
 
 The `align` option works diffrently from all the others in that is uses a simplex search to minimize chi2 by manipulating alignment parameters, not thicknesses and resolution. The alignment parameters should all be 0. The default settings uses more iterations and restarts, due to the fact that there are more parameters to be estimated.
 

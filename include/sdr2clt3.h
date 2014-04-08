@@ -14,22 +14,15 @@ private:
   int nPlanes, nTracks, nGPUThreads;
   bool readTracks;
 
-  cl::Context context;
-  cl::CommandQueue queue;
-  
-  cl::Program program;
-  cl::Kernel firstFW, secondFW, restFW;
-  cl::Kernel firstBW, secondBW, restBW;
-  
   float **measX, **measY;
   float *chi2x, *chi2y;
   
   cl::Buffer bufx, bufdx, bufxx, bufxdx, bufdxdx, bufchi2x;
   cl::Buffer bufy, bufdy, bufyy, bufydy, bufdydy, bufchi2y;
   cl::Buffer bufmeasX, bufmeasY;
-
+  
   float resVarX, resVarY; //Counters for threads
-
+  
   void startReduction(int nThreads);
   void threadReduce(int min, int max);
   void threadTally();

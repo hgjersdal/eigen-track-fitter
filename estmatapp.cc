@@ -113,9 +113,9 @@ int main(int argc, char* argv[]){
   //Configure system, simulate tracks, and estimate material and resolution
   double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
-  int nTracks = 500000; //How many tracks to simulate per experiment
+  int nTracks = 40000; //How many tracks to simulate per experiment
   //int nTracks = 5; //How many tracks to simulate per experiment
-  int numberOfExperiments = 1; //How many simulation + estimation estimates should be preformed
+  int numberOfExperiments = 100; //How many simulation + estimation estimates should be preformed
 
   EstMat mat;
   mat.init(ebeam, nPlanes); //Initialize the the estimator
@@ -175,8 +175,8 @@ int main(int argc, char* argv[]){
     }
 
     //Parsing argument, doing minimization
-    int iterations = 100; //How many iterations per restart?
-    int restarts = 1; // How many times should the simplex search be restarted?
+    int iterations = 300; //How many iterations per restart?
+    int restarts = 3; // How many times should the simplex search be restarted?
 
     Minimizer* minimize = NULL;
 
