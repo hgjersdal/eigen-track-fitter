@@ -5,7 +5,8 @@
 #include "estmat.h"
 #include "sdr2clt3.h"
 
-SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(9), readTracks(false), nTracks(ntracks) {
+SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(nplanes), readTracks(false), nTracks(ntracks),
+							nGPUThreads(nTracks/4) {
   // Get available platforms
   vector<cl::Platform> platforms;
   cl::Platform::get(&platforms);
@@ -64,7 +65,7 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
   bufxdx = cl::Buffer(context, CL_MEM_READ_WRITE, nTracks * sizeof(float));
   bufdxdx = cl::Buffer(context, CL_MEM_READ_WRITE, nTracks * sizeof(float));
   //write-only
-  bufchi2x = cl::Buffer(context, CL_MEM_WRITE_ONLY, nTracks * sizeof(float));
+  bufchi2x = cl::Buffer(context, CL_MEM_WRITE_ONLY, nGPUThreads * sizeof(float));
   //read-only
   bufmeasX = cl::Buffer(context, CL_MEM_READ_ONLY, nTracks * sizeof(float));
   //read-write
@@ -74,7 +75,7 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
   bufydy = cl::Buffer(context, CL_MEM_READ_WRITE, nTracks * sizeof(float));
   bufdydy = cl::Buffer(context, CL_MEM_READ_WRITE, nTracks * sizeof(float));
   //write-only
-  bufchi2y = cl::Buffer(context, CL_MEM_WRITE_ONLY, nTracks * sizeof(float));
+  bufchi2y = cl::Buffer(context, CL_MEM_WRITE_ONLY, nGPUThreads * sizeof(float));
   //read-only
   bufmeasY = cl::Buffer(context, CL_MEM_READ_ONLY, nTracks * sizeof(float));
 
@@ -86,8 +87,8 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
     measY[ii] = (float*) malloc(nTracks * sizeof(float));
   }
 
-  chi2x= (float*) malloc(nTracks * sizeof(float));
-  chi2y= (float*) malloc(nTracks * sizeof(float));
+  chi2x= (float*) malloc(nGPUThreads * sizeof(float));
+  chi2y= (float*) malloc(nGPUThreads * sizeof(float));
 }
 void SDR2CL::init(){
   if(not readTracks){
@@ -96,36 +97,6 @@ void SDR2CL::init(){
     readTracks = true;
   }
   Minimizer::init();
-}
-
-void SDR2CL::prepareForFit(){
-  //All parameters must be 0 before the fit;
-  for(int ii = 0; ii < nTracks; ii++){
-    x    [ii] = 0.0f;
-    dx   [ii] = 0.0f;
-    xx   [ii] = 0.0f;
-    xdx  [ii] = 0.0f;
-    dxdx [ii] = 0.0f;
-    //chi2x[ii] = 0.0f;
-    y    [ii] = 0.0f;
-    dy   [ii] = 0.0f;
-    yy   [ii] = 0.0f;
-    ydy  [ii] = 0.0f;
-    dydy [ii] = 0.0f;
-    //chi2y[ii] = 0.0f;
-  } 
-  //Write to GPU
-  queue.enqueueWriteBuffer(bufx,    CL_TRUE, 0, nTracks * sizeof(float), x); 
-  queue.enqueueWriteBuffer(bufdx,   CL_TRUE, 0, nTracks * sizeof(float), dx); 
-  queue.enqueueWriteBuffer(bufxx,   CL_TRUE, 0, nTracks * sizeof(float), xx); 
-  queue.enqueueWriteBuffer(bufxdx,  CL_TRUE, 0, nTracks * sizeof(float), xdx); 
-  queue.enqueueWriteBuffer(bufdxdx, CL_TRUE, 0, nTracks * sizeof(float), dxdx); 
-
-  queue.enqueueWriteBuffer(bufy,    CL_TRUE, 0, nTracks * sizeof(float), y); 
-  queue.enqueueWriteBuffer(bufdy,   CL_TRUE, 0, nTracks * sizeof(float), dy); 
-  queue.enqueueWriteBuffer(bufyy,   CL_TRUE, 0, nTracks * sizeof(float), yy); 
-  queue.enqueueWriteBuffer(bufydy,  CL_TRUE, 0, nTracks * sizeof(float), ydy); 
-  queue.enqueueWriteBuffer(bufdydy, CL_TRUE, 0, nTracks * sizeof(float), dydy); 
 }
 
 void SDR2CL::copyMeasurements(float* measx, float* measy){
@@ -153,15 +124,68 @@ void SDR2CL::runKernel(cl::Kernel& kernel, float resx, float resy, float scatter
   kernel.setArg(16, 1.0f/scattervar);
   kernel.setArg(17, dz);
 
-  cl::NDRange global(nTracks);
+  cl::NDRange global(nGPUThreads);
   cl::NDRange local(1);
   queue.enqueueNDRangeKernel(kernel, cl::NullRange, global, local);
+}
+
+//Threaded reduce
+void SDR2CL::startReduction(int nThreads){
+  //Reset counters
+  resVarX = 0.0f;
+  resVarY = 0.0f;
+  //Read data
+  queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nGPUThreads * sizeof(float), chi2x);
+  queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nGPUThreads * sizeof(float), chi2y);
+  //Start threads
+#ifdef DOTHREAD
+  int nElements = nGPUThreads/nThreads; 
+  for(int ii = 0; ii < nThreads; ii++){
+    threads.create_thread( boost::bind(&SDR2CL::threadReduce, this, ii * nElements, (ii + 1) * nElements));
+    //threads.create_thread( boost::bind(&SDR2CL::threadReduce, this, ii, nThreads));
+  }
+#else
+  threadReduce(0,1);
+#endif    
+}
+
+//geforce gtx 460
+
+void SDR2CL::threadTally(){
+  //Join threads, tally result
+#ifdef DOTHREAD
+  threads.join_all();
+#endif
+  //Tally
+  float rsx = 1.0f - resVarX /nGPUThreads;
+  float rsy = 1.0f - resVarY /nGPUThreads;
+  result += rsx * rsx;
+  result += rsy * rsy;
+}
+
+void SDR2CL::threadReduce(int min, int max){
+  //Threaded sum reduce of chi2 vectors
+  if( abs(max - nThreads) < 10) { max = nGPUThreads;}
+  float xSum(0.0f), ySum(0.0f);
+  for(int ii = min; ii < max; ii++){
+    xSum += chi2x[ii];
+    ySum += chi2y[ii];
+  }
+  {
+#ifdef DOTHREAD
+    boost::mutex::scoped_lock lock(reduceGurad);
+#endif
+    resVarX += xSum;
+    resVarY += ySum;
+  }
 }
 
 void SDR2CL::operator() (size_t offset, size_t /*stride*/){
   if(offset!=0) {return;} //Force a single host, discard stride
   //Forward fit
-  //prepareForFit();
+  bool waitReduce = false;
+  int numThreads = 1;
+  
   copyMeasurements(measX[0], measY[0]);
   runKernel(firstFW, mat.resX.at(0), mat.resY.at(0),
 	    mat.system.planes.at(0).getScatterThetaSqr(),
@@ -176,22 +200,22 @@ void SDR2CL::operator() (size_t offset, size_t /*stride*/){
 	      mat.system.planes.at(pl).getScatterThetaSqr(),
 	      mat.zPos[pl] - mat.zPos[pl -1]);
     //Process chi2s
-    queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nTracks * sizeof(float), chi2x);
-    queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nTracks * sizeof(float), chi2y);
-    float countx = 0.0f;
-    float county = 0.0f;
-    //Reduction must be serial?
-    for(int ii= 0; ii < nTracks; ii++){
-      countx += chi2x[ii];
-      county += chi2y[ii];
+    if(waitReduce){
+      //Threads started the previous iteration are joned here
+      threadTally();
     }
-    float rsx = 1.0f - countx /nTracks;
-    float rsy = 1.0f - county /nTracks;
-    result += rsx * rsx;
-    result += rsy * rsy;
+    waitReduce = true;
+    //Threads are started here
+    startReduction(numThreads);
+
+    // queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nTracks * sizeof(float), chi2x);
+    // queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nTracks * sizeof(float), chi2y);
+    // result += chi2x[nTracks - 1];
+    // result += chi2y[nTracks - 1];
+    // result += chi2x[0];
+    // result += chi2y[0];
   }
   
-  //prepareForFit();
   int pl = nPlanes - 1;
   copyMeasurements(measX[pl], measY[pl]);
   runKernel(firstBW, mat.resX.at(pl), mat.resY.at(pl),
@@ -210,20 +234,16 @@ void SDR2CL::operator() (size_t offset, size_t /*stride*/){
 	      mat.system.planes.at(pl).getScatterThetaSqr(),
 	      mat.zPos[pl] - mat.zPos[pl+1]);
     //Process chi2s
-    queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nTracks * sizeof(float), chi2x);
-    queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nTracks * sizeof(float), chi2y);
-    float countx = 0.0f;
-    float county = 0.0f;
-    //Reduction must be serial?
-    for(int ii= 0; ii < nTracks; ii++){
-      countx += chi2x[ii];
-      county += chi2y[ii];
-    }
-    float rsx = 1.0f - countx /nTracks;
-    float rsy = 1.0f - county /nTracks;
-    result += rsx * rsx;
-    result += rsy * rsy;
+    threadTally();
+    startReduction(numThreads);
+    // queue.enqueueReadBuffer(bufchi2x, CL_TRUE, 0, nTracks * sizeof(float), chi2x);
+    // queue.enqueueReadBuffer(bufchi2y, CL_TRUE, 0, nTracks * sizeof(float), chi2y);
+    // result += chi2x[nTracks - 1];
+    // result += chi2y[nTracks - 1];
+    // result += chi2x[0];
+    // result += chi2y[0];
   }
+  threadTally();
 }
 
 SDR2CL::~SDR2CL(){
@@ -233,16 +253,6 @@ SDR2CL::~SDR2CL(){
   }
   free(measX);
   free(measY);
-  // free(x);
-  // free(dx);
-  // free(xx);
-  // free(xdx);
-  // free(dxdx);
   free(chi2x);
-  // free(y);
-  // free(dy);
-  // free(yy);
-  // free(ydy);
-  // free(dydy);
   free(chi2y);
 }

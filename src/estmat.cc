@@ -30,11 +30,12 @@ void EstMat::readTrack(int track, TrackerSystem<FITTERTYPE, 4>& system){
 
 void EstMat::readTracksToArray(float** measX, float** measY, int nTracks, int nPlanes){
   if(nTracks > tracks.size()){
-    throw runtime_error("Trying to read too many tracks!");
+    throw std::runtime_error("Trying to read too many tracks!");
   }
   for(int tr = 0; tr < nTracks; tr++){
     if(tracks.at(tr).size() != 9 or nPlanes != 9){
-      throw runtime_error("SDR2CL currently needs exactly nine measurements in all the tracks.");
+      cout << "nPlanes = " << nPlanes << endl;
+      throw std::runtime_error("SDR2CL currently needs exactly nine measurements in all the tracks.");
     }
     for(int pl = 0; pl < nPlanes; pl++){
       measX[pl][tr] = tracks.at(tr).at(pl).getX();

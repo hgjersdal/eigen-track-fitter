@@ -25,6 +25,7 @@
 
 #include "EUTelDafTrackerSystem.h"
 #include "simutils.h"
+#include <stdexcept>
 
 #include <gsl/gsl_vector_double.h>
 

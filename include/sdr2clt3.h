@@ -11,7 +11,7 @@
 
 class SDR2CL: public Minimizer{
 private:
-  int nPlanes, nTracks;
+  int nPlanes, nTracks, nGPUThreads;
   bool readTracks;
 
   cl::Context context;
@@ -22,20 +22,30 @@ private:
   cl::Kernel firstBW, secondBW, restBW;
   
   float **measX, **measY;
-  float *x, *dx, *xx, *xdx, *dxdx, *chi2x;
-  float *y, *dy, *yy, *ydy, *dydy, *chi2y;
+  float *chi2x, *chi2y;
   
   cl::Buffer bufx, bufdx, bufxx, bufxdx, bufdxdx, bufchi2x;
   cl::Buffer bufy, bufdy, bufyy, bufydy, bufdydy, bufchi2y;
   cl::Buffer bufmeasX, bufmeasY;
+
+  float resVarX, resVarY; //Counters for threads
+
+  void startReduction(int nThreads);
+  void threadReduce(int min, int max);
+  void threadTally();
+
+  void runKernel(cl::Kernel& kernel, float resx, float resy, float scattervar, float dz);
+  void copyMeasurements(float* measx, float *measy);
   
+#ifdef DOTHREAD
+  boost::mutex reduceGurad;
+  boost::thread_group threads;
+#endif
+
   public:
   SDR2CL(EstMat& mat, int nPlanes, int nTracks);
   ~SDR2CL();
   virtual void init();
-  void prepareForFit();
-  void runKernel(cl::Kernel& kernel, float resx, float resy, float scattervar, float dz);
-  void copyMeasurements(float* measx, float *measy);
   void operator() (size_t offset, size_t /*stride*/);
 };
 
