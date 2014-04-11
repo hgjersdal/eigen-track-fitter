@@ -49,6 +49,7 @@ private:
   //data
   std::vector< std::vector<Measurement<FITTERTYPE> > > tracks;
 public:
+  int fitCount;
   //parameters
   std::vector<FITTERTYPE> resX, resY, radLengths, zPos, xShift, yShift, xScale, yScale, zRot;
   //single parameter iteration indexes
@@ -59,8 +60,9 @@ public:
   double eBeam;
   TrackerSystem<FITTERTYPE, 4> system;
 
-  //constructor
-  void init(double eBeam, size_t nPlanes){
+  //Fake constructor
+  void init(double eBeam, size_t nPlanes) {
+    fitCount =0;
     this->eBeam = eBeam;
     radLengths.assign(nPlanes, 0.01);
     resX.assign(nPlanes, 4.3);
@@ -92,6 +94,7 @@ public:
   int itMax;
   void readTrack(int track, TrackerSystem<FITTERTYPE,4>& system);
   void readTracksToArray(float** measX, float** measY, int nTracks, int nPlanes);
+  void readTracksToDoubleArray(float** measX, int nTracks, int nPlanes);
   void clear(){ tracks.clear(); }
   void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim);
   void printParams( char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString);

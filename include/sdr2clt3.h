@@ -11,29 +11,42 @@
 
 class SDR2CL: public Minimizer{
 private:
-  int nPlanes, nTracks, nGPUThreads;
+  int nPlanes, nTracks;
+  int nsplit, nreduced;
   bool readTracks;
 
-  float **measX, **measY;
-  float *chi2x, *chi2y;
-  
-  cl::Buffer bufx, bufdx, bufxx, bufxdx, bufdxdx, bufchi2x;
-  cl::Buffer bufy, bufdy, bufyy, bufydy, bufdydy, bufchi2y;
-  cl::Buffer bufmeasX, bufmeasY;
-  
-  float resVarX, resVarY; //Counters for threads
-  
-  void startReduction(int nThreads);
-  void threadReduce(int min, int max);
-  void threadTally();
+  int nCudaCores;
+  int workGroupSize;
+  int nReduceThreads;
+ 
 
-  void runKernel(cl::Kernel& kernel, float resx, float resy, float scattervar, float dz);
-  void copyMeasurements(float* measx, float *measy);
+  float **measX;
+  float *measVar, *invScatter, *dz;
+  float **chi2f, **chi2b;
+  
+  void writeSysParams();
+  void reduceStage2(cl::Buffer& buf, float* chi2);
   
 #ifdef DOTHREAD
   boost::mutex reduceGurad;
   boost::thread_group threads;
 #endif
+
+  //opencl stuff
+  std::vector<cl::Platform> platforms;
+  cl::Context context;
+  cl::CommandQueue queue;
+  
+  cl::Program program;
+  cl::Kernel fitPlanes;
+  cl::Kernel reduce;
+
+  std::vector<cl::Buffer> measbufs;
+  std::vector<cl::Buffer> chi2fbufs;
+  std::vector<cl::Buffer> chi2bbufs;
+  std::vector<cl::Buffer> reducedxbufs;
+  std::vector<cl::Buffer> reducedybufs;
+  cl::Buffer measvarbuf, invscatterbuf, dzbuf;
 
   public:
   SDR2CL(EstMat& mat, int nPlanes, int nTracks);

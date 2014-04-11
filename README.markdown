@@ -38,7 +38,7 @@ will simulate 1M tracks, and refit them with CKF + DAF. Residuals and chi2 is pl
 	   ./estmat <option>
 where option is one of `fwbw`, `sdr1`, `sdr2`, `sdr2cl`, `sdr3`, `hybr` or `align`.
 
-This will simulate then estimate the resolution and material distribution of 100 track samples. This takes a while, and will run 4 threads. The `sdr2cl` method needs a GPU that can run the openCL kernel. The `sdr3` and `hybr` methods give the best estimates.
+This will simulate then estimate the resolution and material distribution of a 1M track sample. This might take a few minutes, and will run 4 threads. The `sdr2cl` method needs a GPU that can run the openCL kernel. The `sdr3` and `hybr` methods give the best estimates.
 
 The `align` option works diffrently from all the others in that is uses a simplex search to minimize chi2 by manipulating alignment parameters, not thicknesses and resolution. The alignment parameters should all be 0. The default settings uses more iterations and restarts, due to the fact that there are more parameters to be estimated.
 

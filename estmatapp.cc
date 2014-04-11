@@ -113,9 +113,9 @@ int main(int argc, char* argv[]){
   //Configure system, simulate tracks, and estimate material and resolution
   double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
-  int nTracks = 40000; //How many tracks to simulate per experiment
+  int nTracks = 1000000; //How many tracks to simulate per experiment
   //int nTracks = 5; //How many tracks to simulate per experiment
-  int numberOfExperiments = 100; //How many simulation + estimation estimates should be preformed
+  int numberOfExperiments = 1; //How many simulation + estimation estimates should be preformed
 
   EstMat mat;
   mat.init(ebeam, nPlanes); //Initialize the the estimator
@@ -228,7 +228,7 @@ int main(int argc, char* argv[]){
       return(1);
     }
 
-    if(not minimize == NULL){
+    if(not minimize){ // == NULL
       delete minimize;
     }
     cout << "Done estimating" << endl << endl << endl;
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]){
     char* plotname = new char[200];
     sprintf(plotname, "plots/iteration%i%s.root", (int)outeriter, argv[1]); 
     //mat.plot(plotname);
-    delete plotname;
+    delete [] plotname;
     
     //Fill histograms of estimates and plot
     for( int ii = 3; ii < 6; ii++) {

@@ -44,6 +44,22 @@ void EstMat::readTracksToArray(float** measX, float** measY, int nTracks, int nP
   }
 }
 
+void EstMat::readTracksToDoubleArray(float** measX, int nTracks, int nPlanes){
+  if(nTracks > tracks.size()){
+    throw std::runtime_error("Trying to read too many tracks!");
+  }
+  for(int tr = 0; tr < nTracks; tr++){
+    if(tracks.at(tr).size() != 9 or nPlanes != 9){
+      cout << "nPlanes = " << nPlanes << endl;
+      throw std::runtime_error("SDR2CL currently needs exactly nine measurements in all the tracks.");
+    }
+    for(int pl = 0; pl < nPlanes; pl++){
+      measX[pl][(2 * tr)]     = tracks.at(tr).at(pl).getX();
+      measX[pl][(2 * tr) + 1] = tracks.at(tr).at(pl).getY();
+    }
+  }
+}
+
 void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   //Get the explicit estimates
   fastInvert(estim->cov);
@@ -949,6 +965,7 @@ double estimateSimplex(const gsl_vector* v, void * params){
     }
     zPrev = estMat.system.planes.at(ii).getZpos();
   }
+  estMat.fitCount++;
   return((*minimize)());
 }
 
@@ -988,7 +1005,9 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
     minex_func.f = estimateSimplex;
     minex_func.params = minimizeMe;
     
+    
     s = gsl_multimin_fminimizer_alloc (T, nParams);
+
     gsl_multimin_fminimizer_set (s, &minex_func, x, ss);
     
     do{
@@ -1020,6 +1039,7 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
     gsl_multimin_fminimizer_free (s);
     cout << "Status: " << status << endl;
   }
+  cout << "The dataset has been fitted " << fitCount << " times." << endl;
 }
 
 FITTERTYPE EstMat::stepVector(gsl_vector* vc, size_t index, FITTERTYPE value, bool doMSE, Minimizer* minimize){
