@@ -186,6 +186,9 @@ int main(int argc, char* argv[]){
       mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr2cl") == 0){
       cout << "Starting minimization of type SDR2CL" << endl;
+      if(numberOfExperiments > 1){
+	cout << "SDR2CL has some problems with releasing openCL resources. The program might get slow and crash if many jobs are run." << endl;
+      }
       minimize = new SDR2CL(mat, nPlanes, nTracks);
       mat.simplexSearch(minimize, iterations, restarts);
     } else if(strcmp(argv[1], "sdr1") == 0){
@@ -228,9 +231,10 @@ int main(int argc, char* argv[]){
       return(1);
     }
 
-    if(not minimize){ // == NULL
+    if(minimize != NULL){
       delete minimize;
     }
+
     cout << "Done estimating" << endl << endl << endl;
     
     //Plot pull distributions, residuals and chi squares

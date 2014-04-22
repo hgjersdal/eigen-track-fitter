@@ -11,7 +11,7 @@
 
 class SDR2CL: public Minimizer{
 private:
-  int nPlanes, nTracks;
+  int nPlanes, nTracks, nParallel;
   int nsplit, nreduced;
   bool readTracks;
 
@@ -34,6 +34,7 @@ private:
 
   //opencl stuff
   std::vector<cl::Platform> platforms;
+  std::vector<cl::Device> devices;
   cl::Context context;
   cl::CommandQueue queue;
   
@@ -50,7 +51,7 @@ private:
 
   public:
   SDR2CL(EstMat& mat, int nPlanes, int nTracks);
-  ~SDR2CL();
+  virtual ~SDR2CL();
   virtual void init();
   void operator() (size_t offset, size_t /*stride*/);
 };

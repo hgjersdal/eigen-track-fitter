@@ -112,8 +112,10 @@ public:
   boost::mutex resultGurad;
 #endif
   vector<TrackerSystem<FITTERTYPE, 4> > systems;
-
+  
   Minimizer(EstMat& mat) : inited(false), mat(mat), nThreads(4) {;}
+  virtual ~Minimizer(){;};
+
   FITTERTYPE operator() (void);
   virtual void operator() (size_t offset, size_t stride) = 0;
   void prepareThreads();

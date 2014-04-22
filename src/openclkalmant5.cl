@@ -19,16 +19,16 @@
 
 typedef struct{
   //Informationvector
-  float8 x;
-  float8 dx;
+  float4 x;
+  float4 dx;
   //Symmetrix information matrix.
-  float8 xx;
-  float8 xdx;
-  float8 dxdx;
+  float4 xx;
+  float4 xdx;
+  float4 dxdx;
 } estimate;
 
-static inline void update(estimate* e, float8 meas, float8 var){
-  float8 invVar = 1.0f/var;
+static inline void update(estimate* e, float4 meas, float4 var){
+  float4 invVar = 1.0f/var;
   e->x += invVar * meas;
   e->xx += invVar;
 }
@@ -38,7 +38,7 @@ static inline void predict(estimate* e, float dz){
   //Linear error propagation of information matrix.
   //F'WF, where F = [1 -dz][0 1]
 
-  float8 xdxdztmp = dz * e->xdx;
+  float4 xdxdztmp = dz * e->xdx;
   
   e->xdx  += dz * e->xx;
   //e->dxdx += dz * xdxtmp + dz * e->xdx;
@@ -52,7 +52,7 @@ static inline void addScatter(estimate* e, float invScatterVar){
   //Woodbury matrix identity. Assume diagonal scattering matrix, and sparse covariance, and
   //diagonalmapping matrices.
   
-  float8 scatterx = 1.0f/(e->dxdx + invScatterVar);
+  float4 scatterx = 1.0f/(e->dxdx + invScatterVar);
   
   //Update info vector
   e->x  -= scatterx * e->xdx  * e->dx;
@@ -64,64 +64,64 @@ static inline void addScatter(estimate* e, float invScatterVar){
   e->dxdx -= e->dxdx * e->dxdx * scatterx;
 }
 
-static inline float8 getChi2Inc(estimate* e,
-				float8 meas,
-				float8 var){
+static inline float4 getChi2Inc(estimate* e,
+				float4 meas,
+				float4 var){
   //We need the explicit parameters, not the information stuff. Invert and solve.
   //Get partial inverted matrix, do not need dxdx
-  float8 det = 1.0f/(e->xx * e->dxdx - e->xdx * e->xdx);
-  float8 myXx = det * e->dxdx;
-  float8 myXdx = det * -e->xdx;
+  float4 det = 1.0f/(e->xx * e->dxdx - e->xdx * e->xdx);
+  float4 myXx = det * e->dxdx;
+  float4 myXdx = det * -e->xdx;
   //Get explicit x, do not need dx
-  float8 myx = myXx * e->x + myXdx * e->dx;
+  float4 myx = myXx * e->x + myXdx * e->dx;
   
   //Get residuals and
-  float8 resid = myx - meas;
+  float4 resid = myx - meas;
   //chi2 increment
   return( (resid*resid)/(myXx + var) );
 }
 
-static inline float8 fitPlaneFW(estimate* e, float8 meas, float2 mvar, float scatter, float dz){
-  float8 var = mvar.s01010101;
+static inline float4 fitPlaneFW(estimate* e, float4 meas, float2 mvar, float scatter, float dz){
+  float4 var = mvar.s0101;
   predict(e,dz);
-  float8 chi2 = getChi2Inc(e, meas, var);
+  float4 chi2 = getChi2Inc(e, meas, var);
   update(e,meas, var);
   addScatter(e, scatter);
   return(chi2);
 }
 
-static inline float8 fitPlaneBW(estimate* e, float8 meas, float2 mvar, float scatter, float dz){
-  float8 var = mvar.s01010101;
+static inline float4 fitPlaneBW(estimate* e, float4 meas, float2 mvar, float scatter, float dz){
+  float4 var = mvar.s0101;
   predict(e,dz);
   addScatter(e, scatter);
-  float8 chi2 = getChi2Inc(e, meas, var);
+  float4 chi2 = getChi2Inc(e, meas, var);
   update(e,meas, var);
   return(chi2);
 }
 
-__kernel void fitPlanes(__global float8* meas0,
-			__global float8* meas1,
-			__global float8* meas2,
-			__global float8* meas3,
-			__global float8* meas4,
-			__global float8* meas5,
-			__global float8* meas6,
-			__global float8* meas7,
-			__global float8* meas8,
-			__global float8* chi2f_2,
-			__global float8* chi2f_3,
-			__global float8* chi2f_4,
-			__global float8* chi2f_5,
-			__global float8* chi2f_6,
-			__global float8* chi2f_7,
-			__global float8* chi2f_8,
-			__global float8* chi2b_0,
-			__global float8* chi2b_1,
-			__global float8* chi2b_2,
-			__global float8* chi2b_3,
-			__global float8* chi2b_4,
-			__global float8* chi2b_5,
-			__global float8* chi2b_6,
+__kernel void fitPlanes(__global float4* meas0,
+			__global float4* meas1,
+			__global float4* meas2,
+			__global float4* meas3,
+			__global float4* meas4,
+			__global float4* meas5,
+			__global float4* meas6,
+			__global float4* meas7,
+			__global float4* meas8,
+			__global float4* chi2f_2,
+			__global float4* chi2f_3,
+			__global float4* chi2f_4,
+			__global float4* chi2f_5,
+			__global float4* chi2f_6,
+			__global float4* chi2f_7,
+			__global float4* chi2f_8,
+			__global float4* chi2b_0,
+			__global float4* chi2b_1,
+			__global float4* chi2b_2,
+			__global float4* chi2b_3,
+			__global float4* chi2b_4,
+			__global float4* chi2b_5,
+			__global float4* chi2b_6,
 			__constant float2* g_measvar,
 			__constant float* g_invScattervar,
 			__constant float* g_dz,
@@ -131,11 +131,11 @@ __kernel void fitPlanes(__global float8* meas0,
   int gid = get_global_id(0);
   int lid = get_local_id(0);
 
-  estimate e = {(float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-		(float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-		(float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-		(float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-		(float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}};
+  estimate e = {(float4) {0.0f, 0.0f, 0.0f, 0.0f},
+		(float4) {0.0f, 0.0f, 0.0f, 0.0f},
+		(float4) {0.0f, 0.0f, 0.0f, 0.0f},
+		(float4) {0.0f, 0.0f, 0.0f, 0.0f},
+		(float4) {0.0f, 0.0f, 0.0f, 0.0f}};
 
   if(lid < 9){
     measvar[lid] = g_measvar[lid];
@@ -145,10 +145,10 @@ __kernel void fitPlanes(__global float8* meas0,
   barrier(CLK_LOCAL_MEM_FENCE);
 
   //Plane0
-  float8 meas = meas0[gid];
+  float4 meas = meas0[gid];
   float2 mvar = measvar[0];
   float iScatter = invScattervar[0];
-  update(&e,meas, mvar.s01010101);
+  update(&e,meas, mvar.s0101);
   addScatter(&e, iScatter);
 
   //Plane1
@@ -157,7 +157,7 @@ __kernel void fitPlanes(__global float8* meas0,
   iScatter = invScattervar[1];
   float mdz = dz[1];
   predict(&e,mdz);
-  update(&e,meas, mvar.s01010101);
+  update(&e,meas, mvar.s0101);
   addScatter(&e, iScatter);
   //Plane2
   meas = meas2[gid];
@@ -202,17 +202,17 @@ __kernel void fitPlanes(__global float8* meas0,
   mdz = dz[8];
   chi2f_8[gid] = fitPlaneFW(&e, meas, mvar, iScatter, mdz);
   //BW
-  e.x    = (float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  e.dx   = (float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  e.xx   = (float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  e.xdx  = (float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  e.dxdx = (float8) {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  e.x    = (float4) {0.0f, 0.0f, 0.0f, 0.0f};
+  e.dx   = (float4) {0.0f, 0.0f, 0.0f, 0.0f};
+  e.xx   = (float4) {0.0f, 0.0f, 0.0f, 0.0f};
+  e.xdx  = (float4) {0.0f, 0.0f, 0.0f, 0.0f};
+  e.dxdx = (float4) {0.0f, 0.0f, 0.0f, 0.0f};
   
   //Plane8
   //meas = meas8[gid];
   //mvar = measvar[8];
   //iScatter = scattervar[8];
-  update(&e, meas, mvar.s01010101);
+  update(&e, meas, mvar.s0101);
   addScatter(&e, iScatter);
   //Plane7
   meas = meas7[gid];
@@ -221,7 +221,7 @@ __kernel void fitPlanes(__global float8* meas0,
   mdz = -dz[8];
   predict(&e,mdz);
   addScatter(&e, iScatter);
-  update(&e,meas, mvar.s01010101);
+  update(&e,meas, mvar.s0101);
   //Plane6
   meas = meas6[gid];
   mvar = measvar[6];

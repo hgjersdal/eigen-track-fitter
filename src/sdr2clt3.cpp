@@ -10,11 +10,12 @@
 SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(nplanes), readTracks(false), nTracks(ntracks){
   // Get available platforms
   cl::Platform::get(&platforms);
+  nParallel = 4; // is the n in floatn divided by 2. float8-> 4
 
   //adjust nTracks to n832
-  int tmp = (nTracks/4) / 32;
-  cout << "Fitting " << tmp * 4 * 32 << "tracks out of  " << nTracks  << endl;
-  nTracks = tmp * 32 * 4;
+  int tmp = (nTracks/nParallel) / 32;
+  cout << "Fitting " << tmp * nParallel * 32 << " tracks out of  " << nTracks  << endl;
+  nTracks = tmp * 32 * nParallel;
 
   // Select the default platform and create a context using this platform and the GPU
   cl_context_properties cps[3] = { 
@@ -28,13 +29,14 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
     std::cout << error.what() << "(" << error.err() << ")" << std::endl;
   }
   // Get a list of devices on this platform
-  vector<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+  devices = context.getInfo<CL_CONTEXT_DEVICES>();
     
   // Create a command queue and use the first device
   queue = cl::CommandQueue(context, devices[0]);
     
     
-  nCudaCores = 336; //Hard coded :( MAX_COMPUTE_UNITS * 48
+  nCudaCores = 336; //Hard coded :( MAX_COMPUTE_UNITS * 8
+  nCudaCores = 48; //Hard coded :( MAX_COMPUTE_UNITS * 8
   //Print some device info
   cout << "Device: " << endl;
   cout << "Name: " << devices[0].getInfo<CL_DEVICE_NAME>() << endl;
@@ -51,7 +53,7 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
   cl::Program::Sources source(1, std::make_pair(sourceCode.c_str(), sourceCode.length()+1));
     
   // Make program of the source code in the context
-  cl::Program program = cl::Program(context, source);
+  program = cl::Program(context, source);
     
   // Build program for the device. Print log if it fails.
   try{
@@ -111,9 +113,7 @@ SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(
 
 void SDR2CL::init(){
   //Read measurements into float** array from the MatEst object.
-  cout << "Call to init!" << endl;
   if(not readTracks){
-    cout << "Reading measurements!" << endl;
     mat.readTracksToDoubleArray(measX, nTracks, nPlanes);
     readTracks = true;
     //Write measurements to kernel
@@ -188,7 +188,7 @@ void SDR2CL::operator() (size_t offset, size_t /*stride*/){
   fitPlanes.setArg(arg++, nPlanes * sizeof(float), NULL);
 
   //Kernel uses float8, one flot4 for x, one float4 for y.
-  cl::NDRange global(nTracks/4);
+  cl::NDRange global(nTracks/nParallel);
   cl::NDRange local(32);
   queue.enqueueNDRangeKernel(fitPlanes, cl::NullRange, global, local);
 
