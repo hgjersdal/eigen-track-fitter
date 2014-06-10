@@ -27,6 +27,9 @@ multitrack: multitrack.cc
 estmat: estmatapp.cc ./src/estmat.cc ./src/sdr2clt3.cpp
 	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -lOpenCL -o $@ $^ 
 
+estmat2: estmatapp2.cc ./src/estmat.cc
+	$(LD) $(LDFLAGS) $(CXXFLAGS) $(LIBS) -o $@ $^ 
+
 .PHONY: noisesim
 noisesim: noisesimkf noisesimdaf noisesimclu
 

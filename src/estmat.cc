@@ -360,6 +360,7 @@ void SDR::operator() (size_t offset, size_t stride){
   }
 }
 
+
 void FwBw::operator() (size_t offset, size_t stride){
   //Get the negative log likelihood of the state difference of a forward and
   //backward running Kalman filter.
@@ -530,14 +531,17 @@ void EstMat::simulate(int nTracks){
       Matrix<FITTERTYPE, 2, 1> sigmas;
       sigmas(0) = resX.at(pl);
       sigmas(1) = resY.at(pl);
-      if( pl == 3 or pl == 4 or pl == 5){
-      	// double posX = x + (normRand() - 0.5) * 50;
-      	// double posY = y + (normRand() - 0.5) * 400;
-      	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
-      	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
-      } else {
-      	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
-      }
+
+      simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
+
+      // if( pl == 3 or pl == 4 or pl == 5){
+      // 	// double posX = x + (normRand() - 0.5) * 50;
+      // 	// double posY = y + (normRand() - 0.5) * 400;
+      // 	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
+      // 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
+      // } else {
+      // 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
+      // }
       
     }
     addTrack(simTrack);
@@ -1017,13 +1021,13 @@ void EstMat::simplexSearch(Minimizer* minimizeMe, size_t iterations, int restart
       if (status){ break;}
       
       size = gsl_multimin_fminimizer_size (s);
-      status = gsl_multimin_test_size (size, 1e-12);
+      status = gsl_multimin_test_size (size, 1e-6);
       
       if (status == GSL_SUCCESS) {
 	printf ("converged to minimum at\n");
       }
 
-      if(iter % 100 == 0){
+      if(iter % 100 == 0 or status == GSL_SUCCESS){
 	cout << "Iteration " << iter << ", restart " << ii << ", nTracks = " << itMax << endl;
 	printf ("%5d %10.3e %10.3e f() = %7.7f size = %.7f\n", 
 		(int)iter,

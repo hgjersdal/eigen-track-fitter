@@ -349,7 +349,7 @@ int main(){
   system.setYdzMaxDeviance(0.0005f);//How far og the nominal angle can the first two measurements be?
  
   //Add planes to the tracker system
-  float scattertheta = getScatterSigma(ebeam,.1);  
+  float scattertheta = getScatterSigma(ebeam,.01);  
   float scattervar = scattertheta * scattertheta;
   system.addPlane(0, 10    , 4.3f, 4.3f,  scattervar, false);
   system.addPlane(1, 150010, 4.3f, 4.3f,  scattervar, false);
@@ -396,7 +396,7 @@ int main(){
 #else
     sprintf(hashname,"*noisehash-%d-%d*", int(rint(2.0 * chi2cut)), int(rint(2.0 * ckfcut)));
 #endif
-    cout << "(defparameter " << hashname <<" (make-hash-table :test #\'equalp))" << endl;
+    // cout << "(defparameter " << hashname <<" (make-hash-table :test #\'equalp))" << endl;
     
     //Prepare track finder
     system.setCKFChi2Cut( ckfcut * ckfcut ); //Cut on the chi2 increment for the inclusion of a new measurement for combinatorial KF 
@@ -409,7 +409,7 @@ int main(){
     cout << ";;;radius: "   << radius << endl;
 
     //Reset counters
-    for(int noise = 0; noise < 21; noise ++){
+    for(int noise = 20; noise < 21; noise += 2){
       Results result;
       //Start simulation + analysis job
       std::vector< std::vector<Measurement<float> > > simTracks;

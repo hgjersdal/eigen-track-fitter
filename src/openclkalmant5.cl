@@ -12,9 +12,6 @@
   incormation filter stores information matrix W = inv(C) and information vector i = Wx
 
   measusement alternates between x and y, so float2, float4 or float 8 is needed.
-  
-  float4 (2.45) is faster than float2(5:00).
-  float8 (2.0) is faster than float4(2:45).
 */
 
 typedef struct{
