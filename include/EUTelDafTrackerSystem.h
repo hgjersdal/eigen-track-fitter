@@ -44,11 +44,7 @@ namespace daffitter{
     T getZ() const {return(zPos);}
     bool goodRegion() const { return(m_goodRegion); }
     size_t getIden() const { return(m_iden); }
-    
-    Measurement(T x, T y, T z, bool goodRegion, size_t iden):
-      m_goodRegion(goodRegion), zPos(z), m_iden(iden) {
-      m(0) = x; m(1) = y;
-    }
+    Measurement(T x, T y, T z, bool goodRegion, size_t iden);
   };
   
   template <typename T, size_t N>
@@ -61,7 +57,7 @@ namespace daffitter{
     std::vector< Eigen::Matrix<T, Eigen::Dynamic, 1> > weights;
     //Results from fit
     T chi2, ndof;
-    std::vector<TrackEstimate<T,N>*> estimates;
+    std::vector<TrackEstimate<T,N> > estimates;
     void print();
     void init(int nPlanes);
   };
@@ -124,17 +120,9 @@ namespace daffitter{
     //Norm vector
     Eigen::Matrix<T, 3, 1>& getPlaneNorm() { return(norm); }
     void setPlaneNorm(Eigen::Matrix<T, 3, 1> n) { norm = n.normalized(); }
-    void setSigmas(T sigmaX, T sigmaY){
-      sigmas(0) = sigmaX; sigmas(1) = sigmaY;
-      invMeasVar(0) = 1.0f / ( sigmas(0) * sigmas(0));
-      invMeasVar(1) = 1.0f / ( sigmas(1) * sigmas(1));
-    }
-    void setSigmaX(T sigmaX){
-      sigmas(0) = sigmaX; invMeasVar(0) = 1.0/(sigmaX * sigmaX);
-    }
-    void setSigmaY(T sigmaY){
-      sigmas(1) = sigmaY; invMeasVar(1) = 1.0/(sigmaY * sigmaY);
-    }
+    void setSigmas(T sigmaX, T sigmaY);
+    void setSigmaX(T sigmaX);
+    void setSigmaY(T sigmaY);
   };
   template <typename T>
   class PlaneHit {
@@ -147,9 +135,7 @@ namespace daffitter{
     const Eigen::Matrix<T, 2, 1>& getM() { return(xy); }
     int getPlane() const {return(plane); }
     int getIndex() const{return(index); };
-    void print() {
-      std::cout << "Plane " << plane << ", index " << index << ", meas " << std::endl << xy << std::endl; 
-    }
+    void print();
   };
 
   template <typename T, size_t N>
@@ -165,9 +151,9 @@ namespace daffitter{
     //DAF temperature
     T tval;
   public:
-    std::vector<TrackEstimate<T,N>*> forward;
-    std::vector<TrackEstimate<T,N>*> backward;
-    std::vector<TrackEstimate<T,N>*> smoothed;
+    std::vector<TrackEstimate<T,N> > forward;
+    std::vector<TrackEstimate<T,N> > backward;
+    std::vector<TrackEstimate<T,N> > smoothed;
   
     EigenFitter(int nPlanes);
 
@@ -175,24 +161,24 @@ namespace daffitter{
     void setT(T tval) {this->tval = tval;};
     T getT() { return(this->tval); };
     void calculateWeights(std::vector<FitPlane<T> > &pl, T chi2cut, std::vector< Eigen::Matrix<T, Eigen::Dynamic, 1> > &weights);
-    void calculatePlaneWeight(FitPlane<T>  &pl, TrackEstimate<T,N> *e, T chi2cutoff, Eigen::Matrix<T, Eigen::Dynamic, 1> &weights);
+    void calculatePlaneWeight(FitPlane<T>  &pl, TrackEstimate<T,N>& e, T chi2cutoff, Eigen::Matrix<T, Eigen::Dynamic, 1> &weights);
 
     //Information filter
-    void predictInfo(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N>* e);
-    void addScatteringInfo(const FitPlane<T> & pl, TrackEstimate<T,N>* e);
-    void updateInfo(const FitPlane<T>  &pl, const int index, TrackEstimate<T,N>* e);
-    void updateInfoDaf(const FitPlane<T>  &pl, TrackEstimate<T,N>* e, Eigen::Matrix<T, Eigen::Dynamic, 1> &weights);
-    void getAvgInfo(TrackEstimate<T,N>* e1, TrackEstimate<T,N>* e2, TrackEstimate<T,N>* result);
+    void predictInfo(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N>& e);
+    void addScatteringInfo(const FitPlane<T> & pl, TrackEstimate<T,N>& e);
+    void updateInfo(const FitPlane<T>  &pl, const int index, TrackEstimate<T,N>& e);
+    void updateInfoDaf(const FitPlane<T>  &pl, TrackEstimate<T,N>& e, Eigen::Matrix<T, Eigen::Dynamic, 1> &weights);
+    void getAvgInfo(TrackEstimate<T,N>& e1, TrackEstimate<T,N>& e2, TrackEstimate<T,N>& result);
     void smoothInfo();
     //Standard formulation
-    void predict(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N> *e);
+    void predict(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N>& e);
     //smoother
     void smooth();
-    void getAvg(TrackEstimate<T,N> *f, TrackEstimate<T,N> *b, TrackEstimate<T,N> *result);
+    void getAvg(TrackEstimate<T,N>& f, TrackEstimate<T,N>& b, TrackEstimate<T,N>& result);
     //kf
-    void kfUpdate(const FitPlane<T>  &cur, int index, TrackEstimate<T,N> *e);
-    void getKFGain(const FitPlane<T>  &p1, TrackEstimate<T,N> *e);
-    void predictB(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N> *e);
+    void kfUpdate(const FitPlane<T>  &cur, int index, TrackEstimate<T,N>& e);
+    void getKFGain(const FitPlane<T>  &p1, TrackEstimate<T,N>& e);
+    void predictB(const FitPlane<T>  &prev, const FitPlane<T>  &cur, TrackEstimate<T,N>& e);
   };
 
   template <typename T, size_t N>
@@ -210,10 +196,10 @@ namespace daffitter{
     T fitPlanesInfoDafInner(daffitter::TrackCandidate<T,N>* candidate);
     T fitPlanesInfoDafBiased(daffitter::TrackCandidate<T,N>* candidate);
     size_t getMinClusterSize() const { return(m_minClusterSize); }
-    void checkNan(TrackEstimate<T,N>* e);
+    void checkNan(TrackEstimate<T,N>& e);
     //CKF
-    void finalizeCKFTrack(TrackEstimate<T,N> *est, std::vector<int>& indexes, int nMeas, T chi2);
-    void fitPermutation(int plane, TrackEstimate<T,N> *est, int nSkipped, std::vector<int> &indexes, int nMeas, T chi2);
+    void finalizeCKFTrack(TrackEstimate<T,N>& est, std::vector<int>& indexes, int nMeas, T chi2);
+    void fitPermutation(int plane, TrackEstimate<T,N>& est, int nSkipped, std::vector<int> &indexes, int nMeas, T chi2);
     
   public: 
     //std::vector<int> m_chi2vals;
@@ -233,9 +219,9 @@ namespace daffitter{
     size_t getNtracks() const { return(m_nTracks); };
     void weightToIndex(daffitter::TrackCandidate<T,N>* cnd);
     void indexToWeight(daffitter::TrackCandidate<T,N>* cnd);
-    Eigen::Matrix<T, 2, 1> getBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>* estim);
-    Eigen::Matrix<T, 2, 1> getUnBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>* estim);
-    Eigen::Matrix<T, 2, 1> getResiduals(Measurement<T>& meas, TrackEstimate<T,N>* estim);
+    Eigen::Matrix<T, 2, 1> getBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>& estim);
+    Eigen::Matrix<T, 2, 1> getUnBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>& estim);
+    Eigen::Matrix<T, 2, 1> getResiduals(Measurement<T>& meas, TrackEstimate<T,N>& estim);
       
     //Set cut values for track finder
     void setDAFChi2Cut(T chival) { m_dafChi2 = chival;}
