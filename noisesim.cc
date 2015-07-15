@@ -5,6 +5,8 @@
 #include <map>
 #include <TMath.h>
 #include <algorithm>
+#include <TRandom3.h>
+
 
 #include <boost/thread.hpp>
 #include <boost/thread/detail/thread_group.hpp>
@@ -31,6 +33,17 @@ Simnple application og the straight line track fitter.
 Results are printed to lisp code
 */
 
+void printHisto(TH1D* histo){
+  cout << "(list" 
+       <<  " :min " << histo->GetXaxis()->GetXmin()
+       << " :bin-size " << histo->GetBinWidth( 0 ) << endl
+       << ":data (list" << endl;
+  for(int ii = 1; ii <= histo->GetNbinsX(); ii++){
+    cout << " " << histo->GetBinContent( ii );
+  }
+  cout << endl << "))" << endl;
+}
+
 
 //Enum for counters
 enum valueBase{
@@ -47,15 +60,17 @@ enum valueBase{
   nNan = 9,
 };
 
-
+TH2D* weightvchi2;
 //Class for bookkeeping
 class Results{
   map<int,int> counterMap; //Keep track of simple counters.
   map<int,double> valueMap; //Keep track of values that are not simple counters. i.e. weights.
 
-  Matrix<double, 4, 4> tmpCov; //Used to obtain determinant of empirical covariance of the parameter residuals
+  Eigen::Matrix<double, 4, 4> tmpCov; //Used to obtain determinant of empirical covariance of the parameter residuals
 
 public:
+  //TH1D pvals;
+  //TH2D weightvchi2;
   vector< TrackEstimate<float,4> > truth; //The true state of the track, one per plane.
 
   Results(){ 
@@ -77,8 +92,25 @@ public:
 
     //Prepare for 9 planes
     truth.resize(9);
-  }
 
+    //pvals = TH1D("","",25,0,1);
+    //weightvchi2 = new TH2D("","", 100, 0, 50, 100,0,1.1);
+  }
+  
+  // void getTruePvalDiff(TrackEstimate<float,4> *estim){
+  //   boost::mutex::scoped_lock lock(plotGuard);
+  //   Matrix<float, 4, 1> diff = estim->params - truth.at(0).params;
+  //   Matrix<float, 1, 1> chi2 = diff.transpose() * estim->cov.inverse() * diff;
+  //   float pval = 1.0 - TMath::Gamma( 2, chi2(0,0) / 2.0);
+  //   pvals.Fill(pval);
+  // }
+  
+  void fillWeightVChi2(float weight, float chi2){
+    boost::mutex::scoped_lock lock(plotGuard);
+    if(chi2 > 51.0) { return;}
+    weightvchi2->Fill(chi2, weight);
+  }
+  
   void incrementCount(int iden){ 
     //Increment a counter
     counterMap[iden]++;
@@ -122,10 +154,10 @@ public:
     //Covariance
     tmpCov += tmp.tmpCov;
   }
-  void updateCovariance(Matrix<float, 4, 1>& params, int pl){
+  void updateCovariance(Eigen::Matrix<float, 4, 1>& params, int pl){
     //Increment the covariance matrix. Assumes that the expectation value is 0 for all
     //parameters.
-    Matrix<double, 4, 1> difference = params.cast<double>() - truth.at(pl).params.cast<double>();
+    Eigen::Matrix<double, 4, 1> difference = params.cast<double>() - truth.at(pl).params.cast<double>();
     for(int ii = 0; ii < 4; ii++){
       for(int jj = 0; jj < 4; jj++){
 	tmpCov(ii,jj) += difference(ii) * difference(jj);
@@ -212,7 +244,10 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   }
   
   result.incrementCount(nAccepted);
-  
+
+  //Plot pvals
+  //result.getTruePvalDiff( track->estimates.at(0));
+
   bool ghost = true;
   bool nanp = false;
 
@@ -234,6 +269,14 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
 #endif
       tmptotweight += weight;
       if(not real){ tmpfakeweight += weight; }
+      if(ii==0){
+      	//Weight v chi2
+      	Eigen::Matrix<float, 2, 1> diff = system.getResiduals(system.planes.at(ii).meas.at(mm), track->estimates.at(ii));
+      	Eigen::Matrix<float, 2, 1> err = system.getUnBiasedResidualErrors(system.planes.at(ii), track->estimates.at(ii));
+      	float chi2w = diff(0) * diff(0)/err(0);
+      	chi2w += diff(1) * diff(1)/err(1);
+      	result.fillWeightVChi2(weight, chi2w);
+      }
     }
     if( system.planes.at(ii).meas.at(track->indexes.at(ii) ).goodRegion()){
       ghost = false;
@@ -302,7 +345,7 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
 }
 
 //Function that performs 1/nThread of the simulation + analysis
-void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoise, float efficiency){
+void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoise, float efficiency, TRandom3 &rand){
 
   //Copy trackersystem to avoid problems with concurrency
   TrackerSystem<float,4> system((*bigSys));
@@ -318,7 +361,7 @@ void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoi
     simTracks.clear();
     system.clear();
     
-    simulate(system, simTracks, efficiency, tmp.truth);
+    simulate(system, simTracks, efficiency, tmp.truth, rand);
     //Add nNoise noise hits per plane
     for(size_t pl = 0; pl < system.planes.size(); pl++){
       boost::mutex::scoped_lock lock(randGuard);
@@ -336,7 +379,7 @@ void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoi
 }
 
 int main(){
-
+  weightvchi2 = new TH2D("","", 100, 0, 50, 100,0,1.1);
   double ebeam = 100.0;
   int nPlanes = 9;
   
@@ -362,12 +405,13 @@ int main(){
   system.addPlane(8, 980010, 4.3f, 4.3f,  scattervar, false);
   system.init();
   
-  int nTracks = 1000000; //Number of tracks to be simulated
+  int nTracks = 10000000; //Number of tracks to be simulated
   int nThreads = 4;
   float efficiency = 0.95;
  
   srandom ( time(NULL) );
   std::srand ( unsigned ( std::time(0) ) );
+  TRandom3 rand(time(NULL));
 
   char hashname[200];
 
@@ -377,17 +421,17 @@ int main(){
 #else
   float chi2cut = 0.0;
 #endif
-  float ckfcut = 6;
-  int radius = 0;
+  float ckfcut = 6.0;
+  int radius = 100;
 
   //Scan cut parameter for selected method
-#ifdef CLU
-  for(radius = 60; radius < 200; radius += 5)
-#elif defined DAF
-  for(chi2cut = 1; chi2cut < 20 ; chi2cut += 0.5)
-#else
-  for(ckfcut = 1; ckfcut < 20 ; ckfcut += 0.5)
-#endif
+// #ifdef CLU
+//   for(radius = 60; radius < 200; radius += 5)
+// #elif defined DAF
+//   for(chi2cut = 1; chi2cut < 20 ; chi2cut += 0.5)
+// #else
+//   for(ckfcut = 1; ckfcut < 20 ; ckfcut += 0.5)
+// #endif
   {
     //Prepare lisp output to be analyzed elsewhere.
     //Create hash tabke name from cut values
@@ -396,7 +440,7 @@ int main(){
 #else
     sprintf(hashname,"*noisehash-%d-%d*", int(rint(2.0 * chi2cut)), int(rint(2.0 * ckfcut)));
 #endif
-    // cout << "(defparameter " << hashname <<" (make-hash-table :test #\'equalp))" << endl;
+    cout << "(defparameter " << hashname <<" (make-hash-table :test #\'equalp))" << endl;
     
     //Prepare track finder
     system.setCKFChi2Cut( ckfcut * ckfcut ); //Cut on the chi2 increment for the inclusion of a new measurement for combinatorial KF 
@@ -409,21 +453,34 @@ int main(){
     cout << ";;;radius: "   << radius << endl;
 
     //Reset counters
-    for(int noise = 20; noise < 21; noise += 2){
+    for(int noise = 0; noise < 1; noise += 2){
       Results result;
       //Start simulation + analysis job
       std::vector< std::vector<Measurement<float> > > simTracks;
       boost::thread_group threads;
       for(int ii = 0; ii < nThreads; ii++){
-	threads.create_thread( boost::bind(job, &system, &result, nTracks / nThreads, noise, efficiency));
+	threads.create_thread( boost::bind(job, &system, &result, nTracks / nThreads, noise, efficiency, rand));
       }
       threads.join_all();
       
       //Write results as lisp
       result.printPlist(noise, hashname);
+      
+      //Histos
+      // TFile* tfile = new TFile("plots/noisesim.root", "RECREATE");
+      // result.pvals.Write();
+      // weightvchi2->Write();
+      // tfile->Close();
+      // printHisto(&result.pvals);
+      for(int ii = 0; ii < 100; ii++){
+      	for(int jj = 0; jj < 100 ; jj++){
+      	  cout << "(setf (aref *nonnoisy-chi2-vs-weight* " << ii << " " << jj << ") (coerce " << weightvchi2->GetBinContent(ii+1,jj+1) << " 'double-float))" << endl;
+      	}
+      }
     }
   }
   //Print the algorithm type
+
 #ifdef CLU
   cout << ";;;CLU!!!" << endl;
 #elif defined  DAF

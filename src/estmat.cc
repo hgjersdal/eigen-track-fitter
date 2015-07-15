@@ -65,7 +65,7 @@ void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
   fastInvert(estim->cov);
   //Sparse multiply
   FITTERTYPE x(estim->params(0)), y(estim->params(1)), dx(estim->params(2)), dy(estim->params(3));
-  Matrix<FITTERTYPE, 4, 1> offdiag, reverse(dx, dy, x, y);
+  Eigen::Matrix<FITTERTYPE, 4, 1> offdiag, reverse(dx, dy, x, y);
   offdiag(0) = offdiag(2) = estim->cov(0,2);
   offdiag(1) = offdiag(3) = estim->cov(1,3);
   estim->params = estim->params.array() * estim->cov.diagonal().array() + offdiag.array() * reverse.array();
@@ -92,7 +92,7 @@ void FakeChi2::calibrate(TrackerSystem<FITTERTYPE,4>& system){
   system.fitInfoFWUnBiased(system.tracks.at(0));
   //Matrix<FITTERTYPE, 2, 1> errors = 
 
-  Matrix<FITTERTYPE,2,1> errv;
+  Eigen::Matrix<FITTERTYPE,2,1> errv;
   
   for(size_t ii = 2; ii < system.planes.size(); ii++){
     if(system.planes.at(ii).isExcluded()) { continue;}
@@ -128,7 +128,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
 #endif
     if(firstRun){ calibrate(system); }
   }
-  Matrix<FITTERTYPE, 2, 1> resv;
+  Eigen::Matrix<FITTERTYPE, 2, 1> resv;
 
   FITTERTYPE chi2 = 0;
   for(int track = offset; track < mat.itMax; track += stride){
@@ -179,7 +179,7 @@ void FakeAbsDev::operator() (size_t offset, size_t stride){
 #endif
     if(firstRun){ calibrate(system); }
   }
-  Matrix<FITTERTYPE, 2, 1> resv;
+  Eigen::Matrix<FITTERTYPE, 2, 1> resv;
 
   FITTERTYPE chi2 = 0;
   for(int track = offset; track < mat.itMax; track += stride){
@@ -281,10 +281,10 @@ void SDR::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
+      Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       //Get variance of residuals in x and y
-      Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
+      Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
+      Eigen::Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXFW.at(pl - 2) += pull2(0); 
       sqrPullYFW.at(pl - 2) += pull2(1); 
     }
@@ -292,9 +292,9 @@ void SDR::operator() (size_t offset, size_t stride){
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
-      Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
+      Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
+      Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
+      Eigen::Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXBW.at(pl) += pull2(0);
       sqrPullYBW.at(pl) += pull2(1);
     }
@@ -314,11 +314,11 @@ void SDR::operator() (size_t offset, size_t stride){
       for(size_t pl = 1; pl < system.planes.size() -2; pl++){
 	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
 	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	Matrix<double, 4, 1> tmpDiff =  (fw->params - bw->params).cast<double>();
-	Matrix<FITTERTYPE, 4, 4> tmpCov =  fw->cov + bw->cov;
+	Eigen::Matrix<double, 4, 1> tmpDiff = (fw->params - bw->params).cast<double>();
+	Eigen::Matrix<FITTERTYPE, 4, 4> tmpCov =  fw->cov + bw->cov;
 	
 	//Use doubles, else it fails
-	Eigen::LLT<Matrix4d> tmpChol;
+	Eigen::LLT<Eigen::Matrix4d> tmpChol;
 	tmpChol.compute(tmpCov.cast<double>());
 	tmpChol.solve(tmpDiff);
 	//tmpChol.matrixL().marked<Eigen::Lower>().solveTriangularInPlace(tmpDiff);
@@ -395,8 +395,8 @@ void FwBw::operator() (size_t offset, size_t stride){
       mat.getExplicitEstimate(fw);
       mat.getExplicitEstimate(bw);
     }
-    Matrix<FITTERTYPE, 4, 4> cov;
-    Matrix<FITTERTYPE, 4, 1> resids;
+    Eigen::Matrix<FITTERTYPE, 4, 4> cov;
+    Eigen::Matrix<FITTERTYPE, 4, 1> resids;
     //Difference in parameters
     for(size_t pl = 1; pl < system.planes.size() -2; pl++){
       TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
@@ -415,10 +415,10 @@ void FwBw::operator() (size_t offset, size_t stride){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
+      Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       //Get variance of residuals in x and y
-      Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
+      Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
+      Eigen::Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXFW.at(pl - 2) += pull2(0); 
       sqrPullYFW.at(pl - 2) += pull2(1); 
     }
@@ -426,9 +426,9 @@ void FwBw::operator() (size_t offset, size_t stride){
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
       TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-      Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
-      Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-      Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
+      Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
+      Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
+      Eigen::Matrix<FITTERTYPE, 2, 1> pull2 = resids.array() / variance.array();
       sqrPullXBW.at(pl) += pull2(0); 
       sqrPullYBW.at(pl) += pull2(1); 
     }
@@ -513,6 +513,11 @@ void EstMat::simulate(int nTracks){
     gaussRand(x, y);
     x *= 10000.0f;
     y *= 10000.0f;
+
+    //Shit in positive direction
+    x += 20000.0f;
+    y += 20000.0f;
+    
     double g1, g2;
     gaussRand(g1, g2);
     dx += g1 * 0.0001f;
@@ -528,7 +533,7 @@ void EstMat::simulate(int nTracks){
       dx += g1 * getScatterSigma(eBeam, radLengths.at(pl));
       dy += g2 * getScatterSigma(eBeam, radLengths.at(pl));
       gaussRand(g1, g2);
-      Matrix<FITTERTYPE, 2, 1> sigmas;
+      Eigen::Matrix<FITTERTYPE, 2, 1> sigmas;
       sigmas(0) = resX.at(pl);
       sigmas(1) = resY.at(pl);
 
@@ -574,7 +579,7 @@ void EstMat::movePlaneZ(int planeIndex, double zPos){
   //Move the plane in the z direction
   FitPlane<FITTERTYPE>& pl = system.planes.at(planeIndex);
   pl.setZpos( zPos);
-  Matrix<FITTERTYPE, 3, 1> ref = pl.getRef0();
+  Eigen::Matrix<FITTERTYPE, 3, 1> ref = pl.getRef0();
   ref(2) += zPos;
   pl.setRef0( ref );
 }
@@ -672,14 +677,14 @@ void EstMat::plot(char* fname){
       chi2OverNeod->Fill( candidate->chi2 / candidate->ndof );
 
       for(int ii = 0; ii < (int) system.planes.size() ; ii++ ){
-	candidate->estimates.at(ii)->copy( system.m_fitter->smoothed.at(ii) );
+	(*candidate->estimates.at(ii)) =(*system.m_fitter->smoothed.at(ii) );
       }
       for(size_t pl = 0; pl < system.planes.size(); pl++){
       	if( system.planes.at(pl).meas.size() < 1){ continue; }
       	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
 	TrackEstimate<FITTERTYPE, 4>* est = candidate->estimates.at(pl);
-	Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, est);
-	Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), est);
+	Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, est);
+	Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), est);
       	resX.at(pl)->Fill(resids(0));
       	resY.at(pl)->Fill(resids(1));
       	pullX.at(pl)->Fill(resids(0)/sqrt(variance(0)));
@@ -694,13 +699,13 @@ void EstMat::plot(char* fname){
 
 	TrackEstimate<FITTERTYPE, 4>* est3 = candidate->estimates.at(3);
       	Measurement<FITTERTYPE>& meas3 = system.planes.at(3).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids3 = system.getResiduals(meas3, est3);
-	Matrix<FITTERTYPE, 2, 1> variance3 = system.getUnBiasedResidualErrors(system.planes.at(3), est3);
+	Eigen::Matrix<FITTERTYPE, 2, 1> resids3 = system.getResiduals(meas3, est3);
+	Eigen::Matrix<FITTERTYPE, 2, 1> variance3 = system.getUnBiasedResidualErrors(system.planes.at(3), est3);
 	
 	TrackEstimate<FITTERTYPE, 4>* est4 = candidate->estimates.at(4);
       	Measurement<FITTERTYPE>& meas4 = system.planes.at(4).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids4 = system.getResiduals(meas4, est4);
-	Matrix<FITTERTYPE, 2, 1> variance4 = system.getUnBiasedResidualErrors(system.planes.at(4), est4);
+	Eigen::Matrix<FITTERTYPE, 2, 1> resids4 = system.getResiduals(meas4, est4);
+	Eigen::Matrix<FITTERTYPE, 2, 1> variance4 = system.getUnBiasedResidualErrors(system.planes.at(4), est4);
 	
 	corr34X->Fill( resids3(0)/sqrt(variance3(0)), resids4(0)/sqrt(variance4(0)));
 	corr34Y->Fill( resids3(1)/sqrt(variance3(1)), resids4(1)/sqrt(variance4(1)));
@@ -716,13 +721,13 @@ void EstMat::plot(char* fname){
 	system.fitPlanesInfoUnBiased(candidate);
 	TrackEstimate<FITTERTYPE, 4>* est6 = candidate->estimates.at(6);
       	Measurement<FITTERTYPE>& meas6 = system.planes.at(6).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids6 = system.getResiduals(meas6, est6);
-	Matrix<FITTERTYPE, 2, 1> variance6 = system.getUnBiasedResidualErrors(system.planes.at(6), est6);
+	Eigen::Matrix<FITTERTYPE, 2, 1> resids6 = system.getResiduals(meas6, est6);
+	Eigen::Matrix<FITTERTYPE, 2, 1> variance6 = system.getUnBiasedResidualErrors(system.planes.at(6), est6);
 	
 	TrackEstimate<FITTERTYPE, 4>* est2 = candidate->estimates.at(2);
       	Measurement<FITTERTYPE>& meas2 = system.planes.at(2).meas.at(0);
-	Matrix<FITTERTYPE, 2, 1> resids2 = system.getResiduals(meas2, est2);
-	Matrix<FITTERTYPE, 2, 1> variance2 = system.getUnBiasedResidualErrors(system.planes.at(2), est2);
+	Eigen::Matrix<FITTERTYPE, 2, 1> resids2 = system.getResiduals(meas2, est2);
+	Eigen::Matrix<FITTERTYPE, 2, 1> variance2 = system.getUnBiasedResidualErrors(system.planes.at(2), est2);
 	
 	// corr12X->Fill( resids2(0), resids6(0));
 	// corr12Y->Fill( resids2(1), resids6(1));
@@ -1098,7 +1103,7 @@ void EstMat::quasiNewtonHomeMade(Minimizer* minimizeMe, int iterations){
       double newVal = firstDeriv / secondDeriv;
       
       //Check the new value for NaNs, steps in wrong direction or large steps
-      if(isnan(newVal) or isinf(newVal)){
+      if(std::isnan(newVal) or std::isinf(newVal)){
 	cout << "Nan step "<< endl;
       } else {
 	if(secondDeriv < 0 ){ 

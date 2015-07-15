@@ -3,6 +3,8 @@
 #include <TH1D.h>
 #include <TFile.h>
 #include <TMath.h>
+#include <TRandom3.h>
+
 
 #include "simutils.h"
 
@@ -58,6 +60,8 @@ void lispify(vector <TH1D*> &pulls, TH1D* chi2, TH1D* pvals, const char* name){
 }
 
 int main(){
+  TRandom3 rand(time(NULL));
+
   double ebeam = 100.0;
   int nPlanes = 9;
 
@@ -70,6 +74,7 @@ int main(){
   vector <TH1D*> pullY;
   TH1D* chi2  = new TH1D("chi2","chi2",100,0,50);
   TH1D* pvals  = new TH1D("pvals","pvals",100,0,1);
+  TH1D* pvals2  = new TH1D("pvals2","pvals2",100,0,1);
   for(int ii = 0; ii < nPlanes; ii++){
     char name[100];
     sprintf(name, "resX%i", ii);
@@ -93,15 +98,16 @@ int main(){
   system.setDAFChi2Cut( 100.0f); // DAF chi2 cut-off
   
   //Add planes to the tracker system
-  float scattertheta = getScatterSigma(ebeam,.1);  
+  float thickness = 0.01;
+  float scattertheta = getScatterSigma(ebeam,thickness);  
   float scattervar = scattertheta * scattertheta;
 
   system.addPlane(0, 10    , 4.3f, 4.3f, scattervar,  false);
   system.addPlane(1, 150010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(2, 300010, 4.3f, 4.3f,  scattervar, false);
-  system.addPlane(3, 361712, 4.3f, 4.3f,  scattervar, false);
-  system.addPlane(4, 454810, 4.3f, 4.3f,  scattervar, false);
-  system.addPlane(5, 523312, 4.3f, 4.3f,  scattervar, false);
+  system.addPlane(3, 361712, 50.0/sqrt(12), 400.0/sqrt(12),  scattervar, false);
+  system.addPlane(4, 454810, 50.0/sqrt(12), 400.0/sqrt(12),  scattervar, false);
+  system.addPlane(5, 523312, 50.0/sqrt(12), 400.0/sqrt(12),  scattervar, false);
   system.addPlane(6, 680010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(7, 830010, 4.3f, 4.3f,  scattervar, false);
   system.addPlane(8, 980010, 4.3f, 4.3f,  scattervar, false);
@@ -121,7 +127,9 @@ int main(){
     x = normRand() * 10000.0f;
     y = normRand() * 10000.0f;
     double g1, g2;
-    gaussRand(g1, g2);
+    //gaussRand(g1 g2);
+    g1 = rand.Gaus();
+    g2 = rand.Gaus();
     dx += g1 * 0.0001;
     dy += g2 * 0.0001;
     double zPos = 0;
@@ -130,17 +138,27 @@ int main(){
       zPos = system.planes.at(pl).getZpos();
       x += dx * zDistance;
       y += dy * zDistance;
-      gaussRand(g1, g2);
-      dx += g1 * getScatterSigma(ebeam, 0.1);
-      dy += g2 * getScatterSigma(ebeam, 0.1);
-      gaussRand(g1, g2);
-      
+      //gaussRand(g1, g2);
+      g1 = rand.Gaus();
+      g2 = rand.Gaus();
+
+      dx += g1 * getScatterSigma(ebeam, thickness);
+      dy += g2 * getScatterSigma(ebeam, thickness);
+      //gaussRand(g1, g2);
+      g1 = rand.Gaus();
+      g2 = rand.Gaus();
+
       //Add a measurement to the tracker system at plane pl
-      system.addMeasurement(pl, x + g1 * 4.3f, y + g2 * 4.3f, system.planes.at(pl).getZpos(), true, pl);
+      if( pl == 3 or pl == 4 or pl == 5){
+	system.addMeasurement(pl, x + g1 * 50.0f/sqrt(12.0f), y + g2 * 400.0f/sqrt(12.0f), system.planes.at(pl).getZpos(), true, pl);
+      } else {
+	system.addMeasurement(pl, x + g1 * 4.3f, y + g2 * 4.3f, system.planes.at(pl).getZpos(), true, pl);
+      }
     }
-    
+
     //Track finder
     system.combinatorialKF();
+    
     //Loop over track candidates
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
       if( ii > 0) { cout << "Several candidates!!!" << endl; }
@@ -152,8 +170,19 @@ int main(){
       //Fill plots
       chi2->Fill(track->chi2);
       pvals->Fill( TMath::Gamma( track->ndof / 2, track->chi2 / 2.0) );
-      Matrix<float, 2, 1> residuals;
-      Matrix<float, 2, 1> reserror;
+      double chi2 = 0;
+      for(int ii = 0; ii < track->ndof; ii++){
+	double g1(0.0), g2(0.0);
+	//gaussRand(g1,g2);
+	g1 = rand.Gaus();
+	g2 = rand.Gaus();
+
+	chi2 += g2 * g2;
+      }
+
+      pvals2->Fill( TMath::Gamma( track->ndof / 2, chi2 / 2.0) );
+      Eigen::Matrix<float, 2, 1> residuals;
+      Eigen::Matrix<float, 2, 1> reserror;
       for(int pl = 0; pl < system.planes.size(); pl++){
 	//Index of measurement used by track
 	int index = track->indexes.at(pl);
@@ -176,6 +205,7 @@ int main(){
   TFile* tfile = new TFile("plots/simple.root", "RECREATE");
   chi2->Write();
   pvals->Write();
+  pvals2->Write();
   for( int ii = 0; ii < system.planes.size(); ii++) {
     resX.at( ii )->Write();
     resY.at( ii )->Write();

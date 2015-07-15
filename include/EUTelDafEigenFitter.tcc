@@ -30,7 +30,8 @@ EigenFitter<T,N>::EigenFitter(int nPlanes){
 
 //Weigh estimates
 template <typename T, size_t N>
-void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,N>* e, T chi2cutoff, Matrix<T, Eigen::Dynamic, 1> &weights){
+void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,N>* e,
+					    T chi2cutoff, Eigen::Matrix<T, Eigen::Dynamic, 1> &weights){
   //Calculate neasurement weights based on residuals
   size_t nMeas = plane.meas.size();
   weights.resize(nMeas);
@@ -52,7 +53,8 @@ void EigenFitter<T,N>::calculatePlaneWeight(FitPlane<T>& plane, TrackEstimate<T,
 }
 
 template <typename T, size_t N>
-void EigenFitter<T,N>::calculateWeights(std::vector<FitPlane<T> > &planes, T chi2cut, std::vector< Matrix<T, Eigen::Dynamic, 1> > &weights){
+void EigenFitter<T,N>::calculateWeights(std::vector<FitPlane<T> > &planes, T chi2cut,
+					std::vector< Eigen::Matrix<T, Eigen::Dynamic, 1> > &weights){
   //Estimate measurement weights in all planes based on smoothed track estimate
   //Track estimates should be unbiased.
   size_t nPlanes = planes.size();
@@ -130,7 +132,8 @@ namespace daffitter{
   }
   
   template <typename T, size_t N>
-  void EigenFitter<T,N>::updateInfoDaf(const FitPlane<T> &pl, TrackEstimate<T,N>* e, Matrix<T, Eigen::Dynamic, 1> &weights){
+  void EigenFitter<T,N>::updateInfoDaf(const FitPlane<T> &pl, TrackEstimate<T,N>* e,
+				       Eigen::Matrix<T, Eigen::Dynamic, 1> &weights){
     //Read a measurement into the weighted information filter
     if(pl.isExcluded()) { return;}
     //Weight matrix:

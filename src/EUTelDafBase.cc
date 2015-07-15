@@ -43,6 +43,7 @@
 #include "EUTelVirtualCluster.h"
 #include "EUTelExceptions.h"
 #include "EUTelSparseClusterImpl.h"
+#include "EUTelReferenceHit.h"
 
 // marlin includes ".h"
 #include "marlin/Processor.h"
@@ -97,10 +98,11 @@ using namespace eutelescope;
 EUTelDafBase::EUTelDafBase(std::string name) : marlin::Processor(name) {
   //Universal DAF params
   
-  // input collection
+  // input collections
   std::vector<std::string > HitCollectionNameVecExample;
   HitCollectionNameVecExample.push_back("hit");
   registerInputCollections(LCIO::TRACKERHIT,"HitCollectionName", "Names of input hit collections", _hitCollectionName,HitCollectionNameVecExample);
+  registerOptionalParameter("AlignmentCollectionNames", "Names of alignment collections, should be in same order as application", _alignColNames, std::vector<std::string>());
   
   //Tracker system options
   registerOptionalParameter("MakePlots", "Should plots be made and filled?", _histogramSwitch, static_cast<bool>(false));
@@ -111,9 +113,12 @@ EUTelDafBase::EUTelDafBase(std::string name) : marlin::Processor(name) {
   registerOptionalParameter("TelResolutionY", "Sigma of telescope resolution in the global Y plane,", _telResY,  static_cast < float > (5.3));
   registerOptionalParameter("DutResolutionX", "Sigma of telescope resolution in the global X plane,", _dutResX,  static_cast < float > (115.4));
   registerOptionalParameter("DutResolutionY", "Sigma of telescope resolution in the global Y plane,", _dutResY,  static_cast < float > (14.4));
+
+  //Matres
   registerOptionalParameter("RadiationLengths","Radiation lengths of planes, ordered by z-pos..", _radLength, std::vector<float>());
   registerOptionalParameter("ResolutionX","Sigma resolution of planes, ordered by z-pos.", _sigmaX, std::vector<float>());
   registerOptionalParameter("ResolutionY","Sigma resolution of planes, ordered by z-pos.", _sigmaY, std::vector<float>());
+
   //alignment corrections
   registerOptionalParameter("XShift","X translation of planes, ordered by z-pos..", _xShift, std::vector<float>());
   registerOptionalParameter("YShift","Y translation of planes, ordered by z-pos..", _yShift, std::vector<float>());
@@ -121,15 +126,11 @@ EUTelDafBase::EUTelDafBase(std::string name) : marlin::Processor(name) {
   registerOptionalParameter("YScale","Y scale of planes, ordered by z-pos..", _yScale, std::vector<float>());
   registerOptionalParameter("ZRot","Z rotation of planes, ordered by z-pos..", _zRot, std::vector<float>());
   registerOptionalParameter("ZPos","Z position of planes, ordered by gear z-pos..", _zPos, std::vector<float>());
-
-  registerOptionalParameter("","Radiation lengths of planes, ordered by z-pos..", _radLength, std::vector<float>());
-  registerOptionalParameter("RadiationLengths","Radiation lengths of planes, ordered by z-pos..", _radLength, std::vector<float>());
-  registerOptionalParameter("RadiationLengths","Radiation lengths of planes, ordered by z-pos..", _radLength, std::vector<float>());
-  registerOptionalParameter("RadiationLengths","Radiation lengths of planes, ordered by z-pos..", _radLength, std::vector<float>());
-
   
   //Track finder options
   registerOptionalParameter("FinderRadius","Track finding: The maximum allowed distance between to hits in the xy plane for inclusion in track candidate", _clusterRadius, static_cast<float>(300.0));
+  registerOptionalParameter("Chi2IncrementMax", "Chi2 cut-off for combinatorial Kalman filter", _chi2ckf, static_cast<float>(300.0f));
+  registerOptionalParameter("UseOutdatedCLusterTrackFinder", "Do you want to use the out-dated track finder?", _useClusterFinder, false)
   registerOptionalParameter("Chi2Cutoff","DAF fitter: The cutoff value for a measurement to be included in the fit.", _chi2cutoff, static_cast<float>(300.0f));
   registerOptionalParameter("RequireNTelPlanes","How many telescope planes do we require to be included in the fit?",_nSkipMax ,static_cast <float> (0.0f));
   registerOptionalParameter("NominalDxdz", "dx/dz assumed by track finder", _nXdz, static_cast<float>(0.0f));
@@ -138,7 +139,10 @@ EUTelDafBase::EUTelDafBase(std::string name) : marlin::Processor(name) {
   //Track quality parameters
   registerOptionalParameter("MaxChi2OverNdof", "Maximum allowed global chi2/ndof", _maxChi2, static_cast<float> ( 9999.0));
   registerOptionalParameter("NDutHits", "How many DUT hits do we need in order to accept track?", _nDutHits, static_cast <int>(0));
-  registerOptionalParameter("AlignmentCollectionNames", "Names of alignment collections, should be in same order as application", _alignColNames, std::vector<std::string>());
+
+  //Histogram bounds
+    registerOptionalParameter("TrackAsciiName", "Filename for fitted tracks", _asciiName, string ("tracks.txt"));
+
 }
 
 bool EUTelDafBase::defineSystemFromData(){
@@ -276,8 +280,9 @@ void EUTelDafBase::alignRotate(std::string collectionName, LCEvent* event) {
     }
   }
 }
+
 void EUTelDafBase::getPlaneNorm(daffitter::FitPlane<float>& pl){
-  //CAlculate normal vector of plane from ref points
+  //Calculate normal vector of plane from ref points
   Matrix<float, 3, 1> l1 = pl.getRef1() - pl.getRef0();
   Matrix<float, 3, 1> l2 = pl.getRef2() - pl.getRef0();
   //Calculate plane normal vector from ref points
@@ -340,7 +345,6 @@ void EUTelDafBase::init() {
       _nRef.at(index) = 0;
       errX = _dutResX; errY = _dutResY;
       scatter = getScatterThetaVar( radLength );
-      //scatter *= _scaleScatter;
     }
     //If plane is neither Tel nor Dut, all we need is the zpos and scatter amount.
 
@@ -350,7 +354,6 @@ void EUTelDafBase::init() {
     gearRotate(index, (*zit).second);
   }
  
-
   //Prepare track finder
   _system.setClusterRadius(_clusterRadius);
   _system.setNominalXdz(_nXdz);
@@ -503,7 +506,8 @@ void EUTelDafBase::processEvent(LCEvent * event){
     streamlog_out ( DEBUG2 ) << "EORE found: nothing else to do." << endl;
     return;
   }
-  if( isFirstEvent() ){
+
+  if( isFirstEvent() ){ 
     for(size_t ii = 0; ii < _alignColNames.size(); ii++){
       alignRotate(_alignColNames.at(ii), event);
     }
@@ -580,7 +584,6 @@ void EUTelDafBase::fillPlots(daffitter::TrackCandidate<float, 4>  *track){
       _aidaHistoMap[bname + "dxdz"]->fill( estim->getXdz() );
       _aidaHistoMap[bname + "dydz"]->fill( estim->getYdz() );
       if( ii != 4) { continue; }
-      //plane.setMeasZ( plane.getMeasZ() - 175.0);
       _aidaZvHitX->fill(estim->getX(), meas.getZ() - plane.getZpos());
       _aidaZvFitX->fill(estim->getX(), (plane.getMeasZ() - plane.getZpos()) - (meas.getZ() - plane.getZpos()));
       _aidaZvHitY->fill(estim->getY(), meas.getZ() - plane.getZpos());
