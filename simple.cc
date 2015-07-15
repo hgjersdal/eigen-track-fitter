@@ -162,16 +162,16 @@ int main(){
     //Loop over track candidates
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
       if( ii > 0) { cout << "Several candidates!!!" << endl; }
-      TrackCandidate<float, 4>* track =  system.tracks.at(ii);
+      TrackCandidate<float, 4>& track =  system.tracks.at(ii);
       //Fit track with DAF. Also calculates DAF approximation of chi2 and ndof
       system.fitPlanesInfoDaf( track );
       //Extract the indexes from DAF weights for easy plotting
       system.weightToIndex( track );
       //Fill plots
-      chi2->Fill(track->chi2);
-      pvals->Fill( TMath::Gamma( track->ndof / 2, track->chi2 / 2.0) );
+      chi2->Fill(track.chi2);
+      pvals->Fill( TMath::Gamma( track.ndof / 2, track.chi2 / 2.0) );
       double chi2 = 0;
-      for(int ii = 0; ii < track->ndof; ii++){
+      for(int ii = 0; ii < track.ndof; ii++){
 	double g1(0.0), g2(0.0);
 	//gaussRand(g1,g2);
 	g1 = rand.Gaus();
@@ -180,17 +180,17 @@ int main(){
 	chi2 += g2 * g2;
       }
 
-      pvals2->Fill( TMath::Gamma( track->ndof / 2, chi2 / 2.0) );
+      pvals2->Fill( TMath::Gamma( track.ndof / 2, chi2 / 2.0) );
       Eigen::Matrix<float, 2, 1> residuals;
       Eigen::Matrix<float, 2, 1> reserror;
       for(int pl = 0; pl < system.planes.size(); pl++){
 	//Index of measurement used by track
-	int index = track->indexes.at(pl);
+	int index = track.indexes.at(pl);
 	//If index is -1, no measurement was used in the plane
 	if( index < 0) {continue;}
 	//               x position of track at plane pl  - x position of measurement with index index at plane pl
-	residuals = system.getResiduals(system.planes.at(pl).meas.at(index), track->estimates.at(pl));
-	reserror = system.getUnBiasedResidualErrors(system.planes.at(pl), track->estimates.at(pl));
+	residuals = system.getResiduals(system.planes.at(pl).meas.at(index), track.estimates.at(pl));
+	reserror = system.getUnBiasedResidualErrors(system.planes.at(pl), track.estimates.at(pl));
 
 	resX.at(pl)->Fill( residuals[0] );
 	resY.at(pl)->Fill( residuals[1] );

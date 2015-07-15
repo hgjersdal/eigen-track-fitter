@@ -96,7 +96,7 @@ public:
   void readTracksToArray(float** measX, float** measY, int nTracks, int nPlanes);
   void readTracksToDoubleArray(float** measX, int nTracks, int nPlanes);
   void clear(){ tracks.clear(); }
-  void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim);
+  void getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>& estim);
   void printParams( char* name, std::vector<FITTERTYPE>& params, bool plot, const char* valString);
   void printAllFreeParams();
 };

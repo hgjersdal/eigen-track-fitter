@@ -60,20 +60,20 @@ void EstMat::readTracksToDoubleArray(float** measX, int nTracks, int nPlanes){
   }
 }
 
-void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>* estim){
+void EstMat::getExplicitEstimate(TrackEstimate<FITTERTYPE, 4>& estim){
   //Get the explicit estimates
-  fastInvert(estim->cov);
+  fastInvert(estim.cov);
   //Sparse multiply
-  FITTERTYPE x(estim->params(0)), y(estim->params(1)), dx(estim->params(2)), dy(estim->params(3));
+  FITTERTYPE x(estim.params(0)), y(estim.params(1)), dx(estim.params(2)), dy(estim.params(3));
   Eigen::Matrix<FITTERTYPE, 4, 1> offdiag, reverse(dx, dy, x, y);
-  offdiag(0) = offdiag(2) = estim->cov(0,2);
-  offdiag(1) = offdiag(3) = estim->cov(1,3);
-  estim->params = estim->params.array() * estim->cov.diagonal().array() + offdiag.array() * reverse.array();
+  offdiag(0) = offdiag(2) = estim.cov(0,2);
+  offdiag(1) = offdiag(3) = estim.cov(1,3);
+  estim.params = estim.params.array() * estim.cov.diagonal().array() + offdiag.array() * reverse.array();
 
-  // estim->params(0) = estim->cov(0,0) * x + estim->cov(0,2) * dx;
-  // estim->params(1) = estim->cov(1,1) * y + estim->cov(1,3) * dy;
-  // estim->params(2) = estim->cov(2,2) * dx+ estim->cov(2,0) * x;
-  // estim->params(3) = estim->cov(3,3) * dy+ estim->cov(3,1) * y;
+  // estim.params(0) = estim.cov(0,0) * x + estim.cov(0,2) * dx;
+  // estim.params(1) = estim.cov(1,1) * y + estim.cov(1,3) * dy;
+  // estim.params(2) = estim.cov(2,2) * dx+ estim.cov(2,0) * x;
+  // estim.params(3) = estim.cov(3,3) * dy+ estim.cov(3,1) * y;
 } 
 
 void FakeChi2::init(){
@@ -96,7 +96,7 @@ void FakeChi2::calibrate(TrackerSystem<FITTERTYPE,4>& system){
   
   for(size_t ii = 2; ii < system.planes.size(); ii++){
     if(system.planes.at(ii).isExcluded()) { continue;}
-    TrackEstimate<FITTERTYPE, 4>* estim = system.m_fitter->forward.at(ii);
+    TrackEstimate<FITTERTYPE, 4>& estim = system.m_fitter.forward.at(ii);
     mat.getExplicitEstimate(estim);
     errv = system.getUnBiasedResidualErrors( system.planes.at(ii), estim);
     resFWErrorX.at(ii) = errv[0];
@@ -106,7 +106,7 @@ void FakeChi2::calibrate(TrackerSystem<FITTERTYPE,4>& system){
   system.fitInfoBWUnBiased(system.tracks.at(0));
   for(size_t ii = 0; ii < system.planes.size() -2; ii++){
     if(system.planes.at(ii).isExcluded()) { continue;}
-    TrackEstimate<FITTERTYPE, 4>* estim = system.m_fitter->backward.at(ii);
+    TrackEstimate<FITTERTYPE, 4>& estim = system.m_fitter.backward.at(ii);
     mat.getExplicitEstimate(estim);
     errv = system.getUnBiasedResidualErrors( system.planes.at(ii), estim);
     resBWErrorX.at(ii) = errv[0];
@@ -139,7 +139,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
     system.fitInfoFWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
     for(size_t pl = 2; pl < system.planes.size(); pl++){
-      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward[pl];
+      TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward[pl];
       mat.getExplicitEstimate(fw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
       resv = system.getResiduals(meas, fw).array().square();
@@ -150,7 +150,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
     system.fitInfoBWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward[pl];
+      TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward[pl];
       mat.getExplicitEstimate(bw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
       resv = system.getResiduals(meas, bw).array().square();
@@ -190,7 +190,7 @@ void FakeAbsDev::operator() (size_t offset, size_t stride){
     system.fitInfoFWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
     for(size_t pl = 2; pl < system.planes.size(); pl++){
-      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward[pl];
+      TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward[pl];
       mat.getExplicitEstimate(fw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
       resv = system.getResiduals(meas, fw);
@@ -201,7 +201,7 @@ void FakeAbsDev::operator() (size_t offset, size_t stride){
     system.fitInfoBWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward[pl];
+      TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward[pl];
       mat.getExplicitEstimate(bw);
       Measurement<FITTERTYPE>& meas = system.planes[pl].meas.at(0);
       resv = system.getResiduals(meas, bw);
@@ -231,7 +231,7 @@ void Chi2::operator() (size_t offset, size_t stride){
       size_t ii = 0;
       system.fitInfoFWBiased(system.tracks.at(ii));
       system.getChi2BiasedInfo(system.tracks.at(ii));
-      varchi2 += system.tracks.at(ii)->chi2;
+      varchi2 += system.tracks.at(ii).chi2;
   }
   
   {
@@ -266,19 +266,19 @@ void SDR::operator() (size_t offset, size_t stride){
     system.fitInfoFWBiased(system.tracks.at(ii));
     system.fitInfoBWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
-    TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
+    TrackEstimate<FITTERTYPE, 4>& fw1 = system.m_fitter.forward.at(1);
     mat.getExplicitEstimate(fw1);
     
     for(size_t pl = 0; pl < system.planes.size() -2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
-      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward.at(pl + 2);
+      TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward.at(pl);
       mat.getExplicitEstimate(fw);
       mat.getExplicitEstimate(bw);
     }
     //Chi2 increments FW
     for(size_t pl = 2; pl < system.planes.size(); pl++){
       //I'm using an information filter, need explicit state and covariance
-      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& result = system.m_fitter.forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
       Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
@@ -290,7 +290,7 @@ void SDR::operator() (size_t offset, size_t stride){
     }
     //Chi2 increments BW
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& result = system.m_fitter.backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
@@ -301,21 +301,21 @@ void SDR::operator() (size_t offset, size_t stride){
     //Difference in parameters
     if(not cholDec){
       for(size_t pl = 1; pl < system.planes.size() -2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
-	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+	TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward.at(pl);
+	TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward.at(pl);
 	for(size_t param = 0; param < 4; param++){
-	  double var = fw->cov(param,param) + bw->cov(param,param);
-	  double res = fw->params(param) - bw->params(param);
+	  double var = fw.cov(param,param) + bw.cov(param,param);
+	  double res = fw.params(param) - bw.params(param);
 	  sqrParams.at(pl -1).at(param) += res * res / var;
 	}
       }
     } else {
       //Attempt at getting pull values from cholesky decomposed covariance.
       for(size_t pl = 1; pl < system.planes.size() -2; pl++){
-	TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
-	TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-	Eigen::Matrix<double, 4, 1> tmpDiff = (fw->params - bw->params).cast<double>();
-	Eigen::Matrix<FITTERTYPE, 4, 4> tmpCov =  fw->cov + bw->cov;
+	TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward.at(pl);
+	TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward.at(pl);
+	Eigen::Matrix<double, 4, 1> tmpDiff = (fw.params - bw.params).cast<double>();
+	Eigen::Matrix<FITTERTYPE, 4, 4> tmpCov =  fw.cov + bw.cov;
 	
 	//Use doubles, else it fails
 	Eigen::LLT<Eigen::Matrix4d> tmpChol;
@@ -387,11 +387,11 @@ void FwBw::operator() (size_t offset, size_t stride){
     system.fitInfoFWBiased(system.tracks.at(ii));
     system.fitInfoBWUnBiased(system.tracks.at(ii));
     //Get explicit estimates
-    TrackEstimate<FITTERTYPE, 4>* fw1 = system.m_fitter->forward.at(1);
+    TrackEstimate<FITTERTYPE, 4>& fw1 = system.m_fitter.forward.at(1);
     mat.getExplicitEstimate(fw1);
     for(size_t pl = 0; pl < system.planes.size() -2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl + 2);
-      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward.at(pl + 2);
+      TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward.at(pl);
       mat.getExplicitEstimate(fw);
       mat.getExplicitEstimate(bw);
     }
@@ -399,10 +399,10 @@ void FwBw::operator() (size_t offset, size_t stride){
     Eigen::Matrix<FITTERTYPE, 4, 1> resids;
     //Difference in parameters
     for(size_t pl = 1; pl < system.planes.size() -2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* fw = system.m_fitter->forward.at(pl);
-      TrackEstimate<FITTERTYPE, 4>* bw = system.m_fitter->backward.at(pl);
-      resids = fw->params - bw->params;
-      cov = fw->cov + bw->cov;
+      TrackEstimate<FITTERTYPE, 4>& fw = system.m_fitter.forward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& bw = system.m_fitter.backward.at(pl);
+      resids = fw.params - bw.params;
+      cov = fw.cov + bw.cov;
       double determinant = cov.determinant();
 	
       fastInvert(cov);
@@ -412,7 +412,7 @@ void FwBw::operator() (size_t offset, size_t stride){
     //Chi2 increments FW
     for(size_t pl = 2; pl < system.planes.size(); pl++){
       //I'm using an information filter, need explicit state and covariance
-      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->forward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& result = system.m_fitter.forward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
       Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
@@ -424,7 +424,7 @@ void FwBw::operator() (size_t offset, size_t stride){
     }
     //Chi2 increments BW
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
-      TrackEstimate<FITTERTYPE, 4>* result = system.m_fitter->backward.at(pl);
+      TrackEstimate<FITTERTYPE, 4>& result = system.m_fitter.backward.at(pl);
       Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
       Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, result).array().square();
       Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
@@ -667,22 +667,22 @@ void EstMat::plot(char* fname){
     readTrack(track, system);
     system.clusterTracker();
     for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
-      TrackCandidate<FITTERTYPE, 4>* candidate = system.tracks.at(ii);
+      TrackCandidate<FITTERTYPE, 4>& candidate = system.tracks.at(ii);
       system.weightToIndex(candidate);
       system.fitPlanesInfoUnBiased(candidate);
       //get p-val
-      pValue->Fill( TMath::Gamma( candidate->ndof / 2, candidate->chi2 / 2.0) );
-      chi2->Fill( candidate->chi2 );
-      ndof->Fill( candidate->ndof );
-      chi2OverNeod->Fill( candidate->chi2 / candidate->ndof );
+      pValue->Fill( TMath::Gamma( candidate.ndof / 2, candidate.chi2 / 2.0) );
+      chi2->Fill( candidate.chi2 );
+      ndof->Fill( candidate.ndof );
+      chi2OverNeod->Fill( candidate.chi2 / candidate.ndof );
 
       for(int ii = 0; ii < (int) system.planes.size() ; ii++ ){
-	(*candidate->estimates.at(ii)) =(*system.m_fitter->smoothed.at(ii) );
+	candidate.estimates.at(ii) = system.m_fitter.smoothed.at(ii);
       }
       for(size_t pl = 0; pl < system.planes.size(); pl++){
       	if( system.planes.at(pl).meas.size() < 1){ continue; }
       	Measurement<FITTERTYPE>& meas = system.planes.at(pl).meas.at(0);
-	TrackEstimate<FITTERTYPE, 4>* est = candidate->estimates.at(pl);
+	TrackEstimate<FITTERTYPE, 4>& est = candidate.estimates.at(pl);
 	Eigen::Matrix<FITTERTYPE, 2, 1> resids = system.getResiduals(meas, est);
 	Eigen::Matrix<FITTERTYPE, 2, 1> variance = system.getUnBiasedResidualErrors(system.planes.at(pl), est);
       	resX.at(pl)->Fill(resids(0));
@@ -697,12 +697,12 @@ void EstMat::plot(char* fname){
 	system.planes.at(4).exclude();
 	system.fitPlanesInfoUnBiased(candidate);
 
-	TrackEstimate<FITTERTYPE, 4>* est3 = candidate->estimates.at(3);
+	TrackEstimate<FITTERTYPE, 4>& est3 = candidate.estimates.at(3);
       	Measurement<FITTERTYPE>& meas3 = system.planes.at(3).meas.at(0);
 	Eigen::Matrix<FITTERTYPE, 2, 1> resids3 = system.getResiduals(meas3, est3);
 	Eigen::Matrix<FITTERTYPE, 2, 1> variance3 = system.getUnBiasedResidualErrors(system.planes.at(3), est3);
 	
-	TrackEstimate<FITTERTYPE, 4>* est4 = candidate->estimates.at(4);
+	TrackEstimate<FITTERTYPE, 4>& est4 = candidate.estimates.at(4);
       	Measurement<FITTERTYPE>& meas4 = system.planes.at(4).meas.at(0);
 	Eigen::Matrix<FITTERTYPE, 2, 1> resids4 = system.getResiduals(meas4, est4);
 	Eigen::Matrix<FITTERTYPE, 2, 1> variance4 = system.getUnBiasedResidualErrors(system.planes.at(4), est4);
@@ -719,12 +719,12 @@ void EstMat::plot(char* fname){
 	system.planes.at(1).exclude();
 	system.planes.at(2).exclude();
 	system.fitPlanesInfoUnBiased(candidate);
-	TrackEstimate<FITTERTYPE, 4>* est6 = candidate->estimates.at(6);
+	TrackEstimate<FITTERTYPE, 4>& est6 = candidate.estimates.at(6);
       	Measurement<FITTERTYPE>& meas6 = system.planes.at(6).meas.at(0);
 	Eigen::Matrix<FITTERTYPE, 2, 1> resids6 = system.getResiduals(meas6, est6);
 	Eigen::Matrix<FITTERTYPE, 2, 1> variance6 = system.getUnBiasedResidualErrors(system.planes.at(6), est6);
 	
-	TrackEstimate<FITTERTYPE, 4>* est2 = candidate->estimates.at(2);
+	TrackEstimate<FITTERTYPE, 4>& est2 = candidate.estimates.at(2);
       	Measurement<FITTERTYPE>& meas2 = system.planes.at(2).meas.at(0);
 	Eigen::Matrix<FITTERTYPE, 2, 1> resids2 = system.getResiduals(meas2, est2);
 	Eigen::Matrix<FITTERTYPE, 2, 1> variance2 = system.getUnBiasedResidualErrors(system.planes.at(2), est2);

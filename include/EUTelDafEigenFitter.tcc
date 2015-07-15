@@ -9,22 +9,21 @@
 using namespace daffitter;
 
 template <typename T, size_t N>
-EigenFitter<T,N>::EigenFitter(int nPlanes){
+EigenFitter<T,N>::EigenFitter(){
   //Constructor, allocate memory for matrices and track estimates
   //H maps parameter vector in to the local x-y coordinates of the plane
   H(0,0) = 1; H(1,1) =1;
   //Transportation matrix
   transM.setIdentity();
   transMtranspose = transM.transpose();
-  //Storage of track estimates per plane for the forward, backward running filters, and for the final smoothed estimate
+}
+
+template <typename T, size_t N>
+void EigenFitter<T,N>::init(int nPlanes){
+  //Resize storage of track estimates per plane for the forward, backward running filters, and for the final smoothed estimate
   backward.resize(nPlanes);  
   forward.resize(nPlanes);
   smoothed.resize(nPlanes);
-  // for(int ii = 0; ii < nPlanes; ii++){
-  //   backward.at(ii) = new TrackEstimate<T,N>();
-  //   forward.at(ii) = new TrackEstimate<T,N>();
-  //   smoothed.at(ii) = new TrackEstimate<T,N>();
-  // }
 }
 
 //Weigh estimates
