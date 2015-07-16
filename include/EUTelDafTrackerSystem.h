@@ -217,8 +217,8 @@ namespace daffitter{
     size_t getNtracks() const { return(m_nTracks); };
     void weightToIndex(daffitter::TrackCandidate<T,N>& cnd);
     void indexToWeight(daffitter::TrackCandidate<T,N>& cnd);
-    Eigen::Matrix<T, 2, 1> getBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>& estim);
-    Eigen::Matrix<T, 2, 1> getUnBiasedResidualErrors(FitPlane<T> & pl, TrackEstimate<T,N>& estim);
+    Eigen::Matrix<T, 2, 1> getBiasedResidualErrors(FitPlane<T>& pl, TrackEstimate<T,N>& estim);
+    Eigen::Matrix<T, 2, 1> getUnBiasedResidualErrors(FitPlane<T>& pl, TrackEstimate<T,N>& estim);
     Eigen::Matrix<T, 2, 1> getResiduals(Measurement<T>& meas, TrackEstimate<T,N>& estim);
       
     //Set cut values for track finder

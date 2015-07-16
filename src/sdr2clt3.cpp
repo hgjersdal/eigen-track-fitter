@@ -7,7 +7,7 @@
 #include "sdr2clt3.h"
 
 
-SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(nplanes), readTracks(false), nTracks(ntracks){
+SDR2CL::SDR2CL(EstMat& mat, int nplanes, int ntracks) : Minimizer(mat), nPlanes(nplanes), nTracks(ntracks), readTracks(false) {
   // Get available platforms
   cl::Platform::get(&platforms);
   nParallel = 4; // is the n in floatn divided by 2. float8-> 4

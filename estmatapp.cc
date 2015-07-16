@@ -37,7 +37,7 @@ void estimationParameters(EstMat& mat){
 void simulateTracks(EstMat& mat, int nTracks){
   //Set up the nominal thicknesses and resolution
   //TEL
-  for(int ii = 0; ii < mat.system.planes.size(); ii++){
+  for(size_t ii = 0; ii < mat.system.planes.size(); ii++){
     mat.resX.at(ii) = mat.resY.at(ii) = 4.3;
     mat.radLengths.at(ii) = 0.0073;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
@@ -61,14 +61,14 @@ void initialGuess(EstMat& mat){
   //Set up initial guesses for the minimization
 
   //TEL, set to true values
-  for(int ii = 0; ii < mat.system.planes.size(); ii++){
+  for(size_t ii = 0; ii < mat.system.planes.size(); ii++){
     mat.resX.at(ii) = mat.resY.at(ii) = 4.3;
     mat.radLengths.at(ii) = 0.0073;
     mat.setPlane(ii, mat.resX.at(ii), mat.resY.at(ii), mat.radLengths.at(ii));
   }
   
   //DUT, gaussian smear from truth
-  for(int ii = 3; ii < 6; ii++){
+  for(size_t ii = 3; ii < 6; ii++){
     double gr1(0), gr2(0);
     gaussRand(gr1, gr2);
     mat.resX.at(ii) = 15.0 + 3.0 * gr1;
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]){
   }
 
   //Configure system, simulate tracks, and estimate material and resolution
-  double ebeam = 40.0; //Beam energy
+  double ebeam = 120.0; //Beam energy
   int nPlanes = 9;
   int nTracks = 1000000; //How many tracks to simulate per experiment
   //int nTracks = 5; //How many tracks to simulate per experiment
@@ -178,8 +178,10 @@ int main(int argc, char* argv[]){
     int iterations = 300; //How many iterations per restart?
     int restarts = 3; // How many times should the simplex search be restarted?
 
-    Minimizer* minimize = NULL;
+    Minimizer* minimize = nullptr;
 
+    cout << "Hello!!!" << endl;
+    
     if(strcmp(argv[1], "fwbw") == 0){
       cout << "Starting minimization of type fwbw" << endl;
       minimize = new FwBw(mat);
@@ -217,7 +219,7 @@ int main(int argc, char* argv[]){
       mat.quasiNewtonHomeMade(minimize, 40);
     } else if(strcmp(argv[1], "align") == 0){
       cout << "Running alignment!" << endl;
-      minimize = new FakeChi2(mat);
+      minimize = new Chi2(mat);
       //Minimizer* minimizer = new FwBw(mat); //<- Should also work, but slower and seems to preform slightly worse (no real comparison performed)
       //Simplex search, starting with 1k tracks, then full sample
       cout << "1K tracks" << endl;
@@ -231,7 +233,7 @@ int main(int argc, char* argv[]){
       return(1);
     }
 
-    if(minimize != NULL){
+    if(minimize != nullptr){
       delete minimize;
     }
 

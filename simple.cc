@@ -60,12 +60,12 @@ void lispify(vector <TH1D*> &pulls, TH1D* chi2, TH1D* pvals, const char* name){
 }
 
 int main(){
-  TRandom3 rand(time(NULL));
+  TRandom3 rand(time(nullptr));
 
   double ebeam = 100.0;
   int nPlanes = 9;
 
-  srandom(time(NULL));
+  srandom(time(nullptr));
 
   //Initialize histograms
   vector <TH1D*> resX;

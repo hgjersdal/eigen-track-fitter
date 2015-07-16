@@ -102,18 +102,18 @@ public:
 };
 
 class Minimizer{
-  bool inited;
+  bool inited = false;
 public:
   EstMat& mat;
   FITTERTYPE retVal2;
-  size_t nThreads;
+  size_t nThreads = 4;
   FITTERTYPE result;
 #if DOTHREAD
   boost::mutex resultGurad;
 #endif
   vector<TrackerSystem<FITTERTYPE, 4> > systems;
   
-  Minimizer(EstMat& mat) : inited(false), mat(mat), nThreads(4) {;}
+  Minimizer(EstMat& mat) : mat(mat) {;}
   virtual ~Minimizer(){;};
 
   FITTERTYPE operator() (void);
@@ -126,7 +126,7 @@ public:
 class Chi2: public Minimizer {
 public:
   Chi2(EstMat& mat) : Minimizer(mat) {;}
-  virtual void operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride) override;
 };
 
 class FakeChi2: public Minimizer {
@@ -139,29 +139,29 @@ protected:
 public:
   FakeChi2(EstMat& mat) : Minimizer(mat), firstRun(false) {;}
   void calibrate(TrackerSystem<FITTERTYPE,4>& system);
-  virtual void init();
-  virtual void operator() (size_t offset, size_t stride);
+  virtual void init() override;
+  virtual void operator() (size_t offset, size_t stride) override;
 };
 
 class FakeAbsDev: public FakeChi2 {
 public:
   FakeAbsDev(EstMat& mat) : FakeChi2(mat) {;}
-  virtual void operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride) override;
 };
 
 class SDR: public Minimizer {
 public:
   bool SDR1, SDR2, cholDec;
   SDR(bool SDR1, bool SDR2, bool cholDec,  EstMat& mat): Minimizer(mat), SDR1(SDR1), SDR2(SDR2), cholDec(cholDec) {;}
-  virtual void operator() (size_t offset, size_t stride);
+  virtual void operator() (size_t offset, size_t stride) override;
 };
 
 class FwBw: public Minimizer {
 public:
   vector <FITTERTYPE> results2;
   FwBw(EstMat& mat): Minimizer(mat), results2(vector<FITTERTYPE>(4,0.0)) {;}
-  virtual void operator() (size_t offset, size_t stride);
-  virtual bool twoRetVals() { return(true);}
+  virtual void operator() (size_t offset, size_t stride) override;
+  virtual bool twoRetVals() { return(true);};
 };
 
 #endif

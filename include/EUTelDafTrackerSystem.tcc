@@ -86,7 +86,7 @@ Measurement<T>::Measurement(T x, T y, T z, bool goodRegion, size_t iden):
 
 template<typename T>
 FitPlane<T>::FitPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatterThetaSqr, bool excluded):
-  sensorID(sensorID), zPosition(zPos), scatterThetaSqr(scatterThetaSqr), excluded(excluded){
+  sensorID(sensorID), scatterThetaSqr(scatterThetaSqr), excluded(excluded), zPosition(zPos){
   //Constructor for a telescope or material plane.
   
   this->sigmas(0) = sigmaX; sigmas(1) = sigmaY;
@@ -172,7 +172,7 @@ inline Eigen::Matrix<T, 2, 1> TrackerSystem<T, N>::getUnBiasedResidualErrors(Fit
 template <typename T,size_t N>
 inline Eigen::Matrix<T, 2, 1> TrackerSystem<T, N>::getResiduals(Measurement<T>& m, TrackEstimate<T, N>& est){
   //Vector of distances from estimate to measurementx
-  return( m.getM() - est.params.head(2));
+  return(m.getM() - est.params.head(2));
 }
 
 template <typename T,size_t N>
@@ -273,6 +273,8 @@ void TrackerSystem<T, N>::index0tracker(){
   for(size_t ii = 0; ii < planes.size(); ii++){
     cnd.indexes[ii] = 0;
   }
+  tracks.push_back(cnd);
+  m_nTracks++;
 }
 
 template <typename T,size_t N>

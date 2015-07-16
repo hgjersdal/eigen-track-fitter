@@ -409,9 +409,9 @@ int main(){
   int nThreads = 4;
   float efficiency = 0.95;
  
-  srandom ( time(NULL) );
+  srandom ( std::time(nullptr) );
   std::srand ( unsigned ( std::time(0) ) );
-  TRandom3 rand(time(NULL));
+  TRandom3 rand(std::time(nullptr));
 
   char hashname[200];
 
