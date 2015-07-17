@@ -68,7 +68,7 @@ void initialGuess(EstMat& mat){
   }
   
   //DUT, gaussian smear from truth
-  for(size_t ii = 3; ii < 6; ii++){
+  for(int ii = 3; ii < 6; ii++){
     double gr1(0), gr2(0);
     gaussRand(gr1, gr2);
     mat.resX.at(ii) = 15.0 + 3.0 * gr1;
@@ -111,7 +111,7 @@ int main(int argc, char* argv[]){
   }
 
   //Configure system, simulate tracks, and estimate material and resolution
-  double ebeam = 120.0; //Beam energy
+  double ebeam = 40.0; //Beam energy
   int nPlanes = 9;
   int nTracks = 1000000; //How many tracks to simulate per experiment
   //int nTracks = 5; //How many tracks to simulate per experiment
@@ -219,7 +219,7 @@ int main(int argc, char* argv[]){
       mat.quasiNewtonHomeMade(minimize, 40);
     } else if(strcmp(argv[1], "align") == 0){
       cout << "Running alignment!" << endl;
-      minimize = new Chi2(mat);
+      minimize = new FakeChi2(mat);
       //Minimizer* minimizer = new FwBw(mat); //<- Should also work, but slower and seems to preform slightly worse (no real comparison performed)
       //Simplex search, starting with 1k tracks, then full sample
       cout << "1K tracks" << endl;

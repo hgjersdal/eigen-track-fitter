@@ -1,9 +1,6 @@
 CXX          = g++
 #CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen3 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread -DNDEBUG -DDOTHREAD -std=c++11
 CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen3 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread -DNDEBUG -std=c++11 -Wall
-#CXXFLAGS     = -g -fPIC -msse4 -I/usr/include/eigen3 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread	
-#CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen3 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread -DNDEBUG
-#CXXFLAGS     = -g -fPIC -msse4 -O3 -I/usr/include/eigen3 -I./include -lgsl -lgslcblas -lboost_system -lboost_thread
 
 LD           = g++
 LDFLAGS      = -g -L.

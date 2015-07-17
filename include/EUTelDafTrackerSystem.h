@@ -199,7 +199,7 @@ namespace daffitter{
     void checkNan(TrackEstimate<T,N>& e);
     //CKF
     void finalizeCKFTrack(TrackEstimate<T,N>& est, std::vector<int>& indexes, int nMeas, T chi2);
-    void fitPermutation(int plane, TrackEstimate<T,N>& est, int nSkipped, std::vector<int> &indexes, int nMeas, T chi2);
+    void fitPermutation(int plane, TrackEstimate<T,N>& est, size_t nSkipped, std::vector<int> &indexes, int nMeas, T chi2);
     
   public: 
     EigenFitter<T,N> m_fitter;

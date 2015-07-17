@@ -181,8 +181,7 @@ int main(){
       }
 
       pvals2->Fill( TMath::Gamma( track.ndof / 2, chi2 / 2.0) );
-      Eigen::Matrix<float, 2, 1> residuals;
-      Eigen::Matrix<float, 2, 1> reserror;
+      Eigen::Matrix<float, 2, 1> residuals, reserror;
       for(int pl = 0; pl < system.planes.size(); pl++){
 	//Index of measurement used by track
 	int index = track.indexes.at(pl);

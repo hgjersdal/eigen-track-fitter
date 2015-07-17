@@ -92,18 +92,7 @@ public:
 
     //Prepare for 9 planes
     truth.resize(9);
-
-    //pvals = TH1D("","",25,0,1);
-    //weightvchi2 = new TH2D("","", 100, 0, 50, 100,0,1.1);
   }
-  
-  // void getTruePvalDiff(TrackEstimate<float,4> *estim){
-  //   boost::mutex::scoped_lock lock(plotGuard);
-  //   Matrix<float, 4, 1> diff = estim->params - truth.at(0).params;
-  //   Matrix<float, 1, 1> chi2 = diff.transpose() * estim->cov.inverse() * diff;
-  //   float pval = 1.0 - TMath::Gamma( 2, chi2(0,0) / 2.0);
-  //   pvals.Fill(pval);
-  // }
   
   void fillWeightVChi2(float weight, float chi2){
     boost::mutex::scoped_lock lock(plotGuard);
@@ -132,32 +121,33 @@ public:
     double val = (getValue(denominator) == 0)? 0 : 100 * getValue(numerator)/ getValue(denominator);
     return(val);
   }
+
   double getCounterPercentage(int numerator, int denominator){ 
     //Get a percentage, avoid divide by 0. Divide by 0 returns 0.
     double val = (getCount(denominator) == 0)? 0 : 100 * getCount(numerator)/ double(getCount(denominator));
     return(val);
   }
+
   void increment(Results& tmp){
     //Increment the master result with the thread result
     //Mutex to avoid collisions
     boost::mutex::scoped_lock lock(plotGuard);
     //Counters
-    map<int,int>::iterator it1 = tmp.counterMap.begin();
+    auto it1 = tmp.counterMap.begin();
     for(;it1 != tmp.counterMap.end(); it1++){
       counterMap[it1->first] += it1->second;
     }
-    //Value counters
-    map<int,double>::iterator it2 = tmp.valueMap.begin();
+	
+    auto it2 = tmp.valueMap.begin();
     for(;it2 != tmp.valueMap.end(); it2++){
       valueMap[it2->first] += it2->second;
     }
-    //Covariance
     tmpCov += tmp.tmpCov;
   }
   void updateCovariance(Eigen::Matrix<float, 4, 1>& params, int pl){
     //Increment the covariance matrix. Assumes that the expectation value is 0 for all
     //parameters.
-    Eigen::Matrix<double, 4, 1> difference = params.cast<double>() - truth.at(pl).params.cast<double>();
+    auto difference = params.cast<double>() - truth.at(pl).params.cast<double>();
     for(int ii = 0; ii < 4; ii++){
       for(int jj = 0; jj < 4; jj++){
 	tmpCov(ii,jj) += difference(ii) * difference(jj);
@@ -170,7 +160,7 @@ public:
     tmpCov.array() /= double(getCount(nSuccess));
     //Return the determinant
     if( getCount(nSuccess) == 0 ){
-      0.0;
+      return(0.0);
     } else {
       return(tmpCov.determinant());
     }
@@ -215,7 +205,7 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   double chi2ndof = 1000; 
   double ndofmin = 3.5; //Only look at tracks with 4 or more measurements
   for(size_t ii = 0; ii < system.getNtracks(); ii++ ){
-    TrackCandidate<float, 4>* track =  system.tracks.at(ii);
+    auto& track =  system.tracks.at(ii);
     // Fit the track!
 #ifdef DAF
     system.fitPlanesInfoDaf( track );
@@ -225,20 +215,20 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
     system.indexToWeight( track );
 #endif
     //Extract the index for the minimum chi2/ndof track
-    if( ((track->chi2 / track->ndof) < chi2ndof)
-      and (track->ndof > ndofmin)){
-    chi2ndof = track->chi2 / track->ndof;
+    if( ((track.chi2 / track.ndof) < chi2ndof) and
+	(track.ndof > ndofmin)){
+    chi2ndof = track.chi2 / track.ndof;
     myTrack = ii;
     }
   }
   
   result.incrementCount(nEvents);
   if(myTrack == -1){ return;  } // -1 means no track was found
-  TrackCandidate<float, 4>* track =  system.tracks.at(myTrack);
+  auto& track =  system.tracks.at(myTrack);
   //Make a cut in the number of measurements included, and  chi2/ndof
-  if(track->ndof < ndofmin){ return; } 
-  if( (track->chi2 / track->ndof) > system.getChi2OverNdofCut()) { return; }
-  if( isnan(track->chi2 / track->ndof) ){
+  if(track.ndof < ndofmin){ return; } 
+  if( (track.chi2 / track.ndof) > system.getChi2OverNdofCut()) { return; }
+  if( isnan(track.chi2 / track.ndof) ){
     cout << "NAN CHI!" << endl; // Should never happen. If it does, a bug in the weigh calculation is a probable cause
     exit(2);
   }
@@ -246,7 +236,7 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   result.incrementCount(nAccepted);
 
   //Plot pvals
-  //result.getTruePvalDiff( track->estimates.at(0));
+  //result.getTruePvalDiff( track.estimates.at(0));
 
   bool ghost = true;
   bool nanp = false;
@@ -254,16 +244,16 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   float tmptotweight = 0.0f;
   float tmpfakeweight = 0.0f;
   
-  for(int ii = 0; ii < track->indexes.size(); ii++ ){
+  for(size_t ii = 0; ii < track.indexes.size(); ii++ ){
     //Skip planes excluded by model or 
     if(system.planes.at(ii).isExcluded() ) { continue;}
-    if(track->indexes.at(ii) < 0 ) {continue;}
-    for(int mm = 0; mm < system.planes.at(ii).meas.size(); mm++){
+    if(track.indexes.at(ii) < 0 ) {continue;}
+    for(size_t mm = 0; mm < system.planes.at(ii).meas.size(); mm++){
       bool real = system.planes.at(ii).meas.at(mm).goodRegion();
-      bool included = ( mm == track->indexes.at(ii) );
 #ifdef DAF
-      float weight = track->weights.at(ii)(mm);
+      float weight = track.weights.at(ii)(mm);
 #else 
+      bool included = ( static_cast<int>(mm) == track.indexes.at(ii) );
       float weight = 0.0f;
       if( included ){ weight = 1.0f;}
 #endif
@@ -271,17 +261,17 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
       if(not real){ tmpfakeweight += weight; }
       if(ii==0){
       	//Weight v chi2
-      	Eigen::Matrix<float, 2, 1> diff = system.getResiduals(system.planes.at(ii).meas.at(mm), track->estimates.at(ii));
-      	Eigen::Matrix<float, 2, 1> err = system.getUnBiasedResidualErrors(system.planes.at(ii), track->estimates.at(ii));
+      	auto diff = system.getResiduals(system.planes.at(ii).meas.at(mm), track.estimates.at(ii));
+      	auto err = system.getUnBiasedResidualErrors(system.planes.at(ii), track.estimates.at(ii));
       	float chi2w = diff(0) * diff(0)/err(0);
       	chi2w += diff(1) * diff(1)/err(1);
       	result.fillWeightVChi2(weight, chi2w);
       }
     }
-    if( system.planes.at(ii).meas.at(track->indexes.at(ii) ).goodRegion()){
+    if( system.planes.at(ii).meas.at(track.indexes.at(ii) ).goodRegion()){
       ghost = false;
     }
-    if( (track->weights.at(ii).size() > 0) and isnan(track->weights.at(ii).sum()) ){
+    if( (track.weights.at(ii).size() > 0) and isnan(track.weights.at(ii).sum()) ){
       nanp = true;
     }
   }
@@ -299,30 +289,30 @@ void analyze(TrackerSystem<float,4>& system, std::vector< std::vector<Measuremen
   }
   //Now we have a good track, that is not a ghost track
   result.incrementCount(nSuccess);
-  result.updateCovariance(track->estimates.at(3)->params, 3);
+  result.updateCovariance(track.estimates.at(3).params, 3);
 
   float planeWeight =0.0f;
   float planeFakeWeight = 0.0f;
-  for(int pl = 0; pl < system.planes.size(); pl++){
+  for(size_t pl = 0; pl < system.planes.size(); pl++){
     if(system.planes.at(pl).isExcluded()) {continue;}
-    if( track->weights.at(pl).sum() > 1.1){
-      cout << "Larger than 1 weights!!! " << track->weights.at(pl).sum() << endl;
+    if( track.weights.at(pl).sum() > 1.1){
+      cout << "Larger than 1 weights!!! " << track.weights.at(pl).sum() << endl;
     }
-    if( track->weights.at(pl).sum() < -0.1){
-      cout << "Smaller than 0 weights!!! " << track->weights.at(pl).sum() << endl;
+    if( track.weights.at(pl).sum() < -0.1){
+      cout << "Smaller than 0 weights!!! " << track.weights.at(pl).sum() << endl;
     }
-    for(int mm = 0; mm < system.planes.at(pl).meas.size(); mm++){
+    for(size_t mm = 0; mm < system.planes.at(pl).meas.size(); mm++){
       bool real = system.planes.at(pl).meas.at(mm).goodRegion();
-      bool included = ( mm == track->indexes.at(pl) );
+      bool included = ( static_cast<int>(mm) == track.indexes.at(pl) );
 #ifdef DAF
-      float weight = track->weights.at(pl)(mm);
+      float weight = track.weights.at(pl)(mm);
 #else 
       float weight = 0.0f;
       if( included ){ weight = 1.0f;}
 #endif
       if( isnan(weight)){
 	cout << weight << ", " << pl << ", " << mm << ", " << result.getCount(nEvents) << endl;;
-	cout << "ndof: " << track->ndof << endl;
+	cout << "ndof: " << track.ndof << endl;
 	exit(3);
       }
       result.incrementValue(totWeight, weight);
@@ -381,7 +371,6 @@ void job(TrackerSystem<float,4>* bigSys, Results* result,  int nTracks, int nNoi
 int main(){
   weightvchi2 = new TH2D("","", 100, 0, 50, 100,0,1.1);
   double ebeam = 100.0;
-  int nPlanes = 9;
   
   TrackerSystem<float,4> system;
   //Configure track finder, these cuts are in place to let everything pass
@@ -405,7 +394,7 @@ int main(){
   system.addPlane(8, 980010, 4.3f, 4.3f,  scattervar, false);
   system.init();
   
-  int nTracks = 10000000; //Number of tracks to be simulated
+  int nTracks = 1000000; //Number of tracks to be simulated
   int nThreads = 4;
   float efficiency = 0.95;
  
@@ -425,16 +414,16 @@ int main(){
   int radius = 100;
 
   //Scan cut parameter for selected method
-// #ifdef CLU
-//   for(radius = 60; radius < 200; radius += 5)
-// #elif defined DAF
-//   for(chi2cut = 1; chi2cut < 20 ; chi2cut += 0.5)
-// #else
-//   for(ckfcut = 1; ckfcut < 20 ; ckfcut += 0.5)
-// #endif
-  {
-    //Prepare lisp output to be analyzed elsewhere.
-    //Create hash tabke name from cut values
+#ifdef CLU
+  for(radius = 60; radius < 200; radius += 20)
+#elif defined DAF
+  for(chi2cut = 1; chi2cut < 20 ; chi2cut += 2)
+#else
+  for(ckfcut = 1; ckfcut < 20 ; ckfcut += 2)
+#endif
+    {
+      //Prepare lisp output to be analyzed elsewhere.
+      //Create hash tabke name from cut values
 #ifdef CLU
     sprintf(hashname,"*noisehash-rad-%d*", radius);
 #else
@@ -453,7 +442,7 @@ int main(){
     cout << ";;;radius: "   << radius << endl;
 
     //Reset counters
-    for(int noise = 0; noise < 1; noise += 2){
+    for(int noise = 0; noise < 20; noise += 2){
       Results result;
       //Start simulation + analysis job
       std::vector< std::vector<Measurement<float> > > simTracks;
@@ -465,22 +454,10 @@ int main(){
       
       //Write results as lisp
       result.printPlist(noise, hashname);
-      
-      //Histos
-      // TFile* tfile = new TFile("plots/noisesim.root", "RECREATE");
-      // result.pvals.Write();
-      // weightvchi2->Write();
-      // tfile->Close();
-      // printHisto(&result.pvals);
-      for(int ii = 0; ii < 100; ii++){
-      	for(int jj = 0; jj < 100 ; jj++){
-      	  cout << "(setf (aref *nonnoisy-chi2-vs-weight* " << ii << " " << jj << ") (coerce " << weightvchi2->GetBinContent(ii+1,jj+1) << " 'double-float))" << endl;
-      	}
-      }
     }
   }
   //Print the algorithm type
-
+  
 #ifdef CLU
   cout << ";;;CLU!!!" << endl;
 #elif defined  DAF

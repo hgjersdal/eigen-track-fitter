@@ -94,7 +94,9 @@ void FakeChi2::calibrate(TrackerSystem<FITTERTYPE,4>& system){
   resBWErrorY.resize(system.planes.size());
   system.clear();
   mat.readTrack(0,system);
-  system.fitInfoFWUnBiased(system.tracks.at(0));
+  system.index0tracker();
+  auto candidate = system.tracks.at(0);
+  system.fitInfoFWUnBiased(candidate);
   //Matrix<FITTERTYPE, 2, 1> errors = 
 
   Eigen::Matrix<FITTERTYPE,2,1> errv;
@@ -108,7 +110,7 @@ void FakeChi2::calibrate(TrackerSystem<FITTERTYPE,4>& system){
     resFWErrorY.at(ii) = errv[1];
   }
 
-  system.fitInfoBWUnBiased(system.tracks.at(0));
+  system.fitInfoBWUnBiased(candidate);
   for(size_t ii = 0; ii < system.planes.size() -2; ii++){
     if(system.planes.at(ii).isExcluded()) { continue;}
     auto& estim = system.m_fitter.backward.at(ii);
@@ -127,7 +129,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
   //Track candidate is the same for all tracks
   system.index0tracker();
   auto candidate = system.tracks.at(0);
-
+  
   {
 #if DOTHREAD
     boost::mutex::scoped_lock lock(resultGurad);
@@ -135,7 +137,7 @@ void FakeChi2::operator() (size_t offset, size_t stride){
     if(firstRun){ calibrate(system); }
   }
   Eigen::Matrix<FITTERTYPE, 2, 1> resv;
-
+  
   FITTERTYPE chi2 = 0;
   for(int track = offset; track < mat.itMax; track += stride){
     //prepare system for new track: clear system from prev go around, read track from memory, run track finder
@@ -147,8 +149,8 @@ void FakeChi2::operator() (size_t offset, size_t stride){
       auto& fw = system.m_fitter.forward[pl];
       mat.getExplicitEstimate(fw);
       auto& meas = system.planes[pl].meas.at(0);
-      resv = system.getResiduals(meas, fw).array().square();
-      chi2 += resv[0]/resFWErrorX[pl] + resv[1]/resFWErrorY[pl]; 
+      resv = system.getResiduals(meas, fw);
+      chi2 += resv(0) * resv(0)/resFWErrorX[pl] + resv(1) * resv(1)/resFWErrorY[pl]; 
     }
 
     //BW
@@ -158,8 +160,8 @@ void FakeChi2::operator() (size_t offset, size_t stride){
       auto& bw = system.m_fitter.backward[pl];
       mat.getExplicitEstimate(bw);
       auto& meas = system.planes[pl].meas.at(0);
-      resv = system.getResiduals(meas, bw).array().square();
-      chi2 += resv[0]/resBWErrorX[pl] + resv[1]/resBWErrorY[pl]; 
+      resv = system.getResiduals(meas, bw);
+      chi2 += resv(0) * resv(0)/resBWErrorX[pl] + resv(1) * resv(1)/resBWErrorY[pl]; 
     }
   }
 
@@ -419,10 +421,10 @@ void FwBw::operator() (size_t offset, size_t stride){
       auto& result = system.m_fitter.forward.at(pl);
       auto& meas = system.planes.at(pl).meas.at(0);
       //Get residuals in x and y, squared
-      auto resids = system.getResiduals(meas, result).array().square();
+      auto resids = system.getResiduals(meas, result);
       //Get variance of residuals in x and y
       auto variance = system.getBiasedResidualErrors(system.planes.at(pl), result);
-      auto pull2 = resids.array() / variance.array();
+      auto pull2 = resids.array().square() / variance.array();
       sqrPullXFW.at(pl - 2) += pull2(0); 
       sqrPullYFW.at(pl - 2) += pull2(1); 
     }
@@ -430,9 +432,9 @@ void FwBw::operator() (size_t offset, size_t stride){
     for(size_t pl = 0; pl < system.planes.size() - 2; pl++){
       auto& result = system.m_fitter.backward.at(pl);
       auto& meas = system.planes.at(pl).meas.at(0);
-      auto resids = system.getResiduals(meas, result).array().square();
+      auto resids = system.getResiduals(meas, result);
       auto variance = system.getUnBiasedResidualErrors(system.planes.at(pl), result);
-      auto pull2 = resids.array() / variance.array();
+      auto pull2 = resids.array().square() / variance.array();
       sqrPullXBW.at(pl) += pull2(0); 
       sqrPullYBW.at(pl) += pull2(1); 
     }
@@ -542,16 +544,6 @@ void EstMat::simulate(int nTracks){
       sigmas(1) = resY.at(pl);
 
       simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
-
-      // if( pl == 3 or pl == 4 or pl == 5){
-      // 	// double posX = x + (normRand() - 0.5) * 50;
-      // 	// double posY = y + (normRand() - 0.5) * 400;
-      // 	// simTrack.push_back( Measurement<FITTERTYPE>(posX, posY, system.planes.at(pl).getZpos(), true, pl) );
-      // 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
-      // } else {
-      // 	simTrack.push_back( Measurement<FITTERTYPE>(x + g1 * sigmas(0), y + g2 * sigmas(1), system.planes.at(pl).getZpos(), true, pl) );
-      // }
-      
     }
     addTrack(simTrack);
   }
@@ -759,50 +751,10 @@ void EstMat::plot(char* fname){
     pullY.at(ii)->Write();
   }
 
-
-  // cout << "(defparameter *corrx* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corry* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corr12x* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // cout << "(defparameter *corr12y* (make-array (list 100 100) :element-type 'double-float))" << endl;
-  // for(int ii = 0; ii < 100; ii++){
-  //   for(int jj = 0; jj < 100; jj++){
-  //     cout << "(setf (aref *corrx* " << ii << " " << jj <<") (coerce " << corr34X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corry* " << ii << " " << jj <<") (coerce " << corr34Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corr12x* " << ii << " " << jj <<") (coerce " << corr12X->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //     cout << "(setf (aref *corr12y* " << ii << " " << jj <<") (coerce " << corr12Y->GetBinContent(ii +1, jj +1) << " 'double-float))"<<endl;
-  //   }
-  // }
-
-  // std::cout << "(defparameter *DUMMY*" << endl;
-  // std::cout << "(list" << std::endl;
-  // std::cout << ":chi2 ";
-  // printHisto(chi2);
-  // std::cout << ":p-val ";
-  // printHisto(pValue);
-  // for(size_t ii = 0; ii < system.planes.size(); ii++){
-  //   std::cout << ":histo" << ii << " ";
-  //   printHisto(pullX.at(ii));
-  // }
-
-  // //Pull means
-  // std::cout << ":means (list";
-  // for(int ii = 0; ii < pullX.size(); ii++){
-  //   cout << " " << pullX.at(ii)->GetMean();
-  // }
-  // cout << endl << ")" << endl;
-  // //Pull sigmas
-  // std::cout << ":sigmas (list";
-  // for(int ii = 0; ii < pullX.size(); ii++){
-  //   cout << " " << pullX.at(ii)->GetRMS();
-  // }
-  // cout << endl << ")" << endl;
-  // std::cout << "))" << std::endl; //closes list and defparameter
-
   cout << "Write" << endl;
   tfile->Write();
   cout << "Done plotting to " << fname << endl;
 }
-
 
 //simplex stuff
 size_t EstMat::getNSimplexParams(){
@@ -874,19 +826,6 @@ void EstMat::estToSystem( const gsl_vector* params, TrackerSystem<FITTERTYPE,4>&
     double scatterTheta = getScatterSigma(eBeam, radLengths.at(index));
     system.planes.at(index).setScatterThetaSqr( scatterTheta * scatterTheta);
   }
-  // for(it = resXIndex.begin(); it != resXIndex.end(); it++){
-  //   resX.at((*it)) = gsl_vector_get(params, param++);
-  //   system.planes.at((*it)).setSigmaX( resX.at((*it)));
-  // }
-  // for(it = resYIndex.begin(); it != resYIndex.end(); it++){
-  //   resY.at((*it)) = gsl_vector_get(params, param++);
-  //   system.planes.at((*it)).setSigmaY( resY.at((*it)));
-  // }
-  // for(it = radLengthsIndex.begin(); it != radLengthsIndex.end(); it++){
-  //   radLengths.at((*it)) = gsl_vector_get(params, param++);
-  //   double scatterTheta = getScatterSigma(eBeam, radLengths.at((*it)));
-  //   system.planes.at((*it)).setScatterThetaSqr( scatterTheta * scatterTheta);
-  // }
   if( resXMulti.size() > 0){
    for(size_t ii = 0; ii < resXMulti.size(); ii++){
       int index = resXMulti.at(ii);

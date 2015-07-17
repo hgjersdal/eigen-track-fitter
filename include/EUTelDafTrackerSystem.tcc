@@ -75,7 +75,7 @@ void TrackCandidate<T,N>::init(int nPlanes){
 
 template<typename T, size_t N>
 TrackCandidate<T,N>::TrackCandidate(int nPlanes){
-  this->init(nPlanes);
+  init(nPlanes);
 }
 
 template<typename T>
@@ -89,10 +89,10 @@ FitPlane<T>::FitPlane(int sensorID, T zPos, T sigmaX, T sigmaY, T scatterThetaSq
   sensorID(sensorID), scatterThetaSqr(scatterThetaSqr), excluded(excluded), zPosition(zPos){
   //Constructor for a telescope or material plane.
   
-  this->sigmas(0) = sigmaX; sigmas(1) = sigmaY;
-  this->variances = sigmas.array().square();
-  this->invMeasVar(0) = 1/(sigmaX * sigmaX);
-  this->invMeasVar(1) = 1/(sigmaY * sigmaY);
+  sigmas(0) = sigmaX; sigmas(1) = sigmaY;
+  variances = sigmas.array().square();
+  invMeasVar(0) = 1/(sigmaX * sigmaX);
+  invMeasVar(1) = 1/(sigmaY * sigmaY);
   ref0(0) = 0.0f; ref0(1) = 0.0f; ref0(2) = zPos;
   norm(0) = 0.0f; norm(1) = 0.0f; norm(2) = 1.0f;
 }
@@ -109,7 +109,7 @@ void FitPlane<T>::print(){
 }
 
 template<typename T>
-inline void FitPlane<T>::setSigmas(T sigmaX, T sigmaY){
+void FitPlane<T>::setSigmas(T sigmaX, T sigmaY){
   //Set both measurement sigmas (std deviations)
   sigmas(0) = sigmaX; sigmas(1) = sigmaY;
   invMeasVar(0) = 1.0f / ( sigmas(0) * sigmas(0));
@@ -117,19 +117,19 @@ inline void FitPlane<T>::setSigmas(T sigmaX, T sigmaY){
 }
 
 template<typename T>
-inline void FitPlane<T>::setSigmaX(T sigmaX){
+void FitPlane<T>::setSigmaX(T sigmaX){
   //Set measurement sigma in X direction (std deviations)
   sigmas(0) = sigmaX; invMeasVar(0) = 1.0/(sigmaX * sigmaX);
 }
 
 template<typename T>
-inline void FitPlane<T>::setSigmaY(T sigmaY){
+void FitPlane<T>::setSigmaY(T sigmaY){
   //Set measurement sigma in Y direction (std deviations)
   sigmas(1) = sigmaY; invMeasVar(1) = 1.0/(sigmaY * sigmaY);
 }
 
 template<typename T>
-inline void PlaneHit<T>::print() {
+void PlaneHit<T>::print() {
   //Print info on PlaneHit
   std::cout << "Plane " << plane << ", index " << index << ", meas " << std::endl << xy << std::endl; 
 }
@@ -258,7 +258,8 @@ inline int TrackerSystem<T, N>::addNeighbors(vector<PlaneHit<T> > &candidate, li
       if(resids.squaredNorm() > m_sqrClusterRadius ) { continue;}
       candidate.push_back((*hit));
       hit = hits.erase(hit);
-      counter ++; break;
+      counter ++;
+      break;
     }
   }
   return (counter);
@@ -319,7 +320,7 @@ void TrackerSystem<T, N>::clusterTracker(){
       }
     }
     for(size_t ii = 0; ii < candidate.size(); ii++){
-      PlaneHit<T> & hit = candidate.at(ii);
+      PlaneHit<T>& hit = candidate.at(ii);
       cnd.weights.at( hit.getPlane() )( hit.getIndex()) = 1.0;
     }
     tracks.push_back(cnd);
@@ -349,8 +350,8 @@ void TrackerSystem<T, N>::fitInfoFWBiased(TrackCandidate<T, N>& candidate){
   //Fit planes in the FW direction (increasing z position). Biased means the updated estimates are saved
   size_t nPlanes = planes.size();
   TrackEstimate<T,N> e;
-
   e.makeSeedInfo();
+
   //Forward fitter, scattering not included at plane, biased
   m_fitter.updateInfo( planes.at(0), candidate.indexes.at(0), e );
   m_fitter.forward.at(0) = e;
@@ -369,6 +370,7 @@ void TrackerSystem<T, N>::fitInfoBWUnBiased(TrackCandidate<T, N>& candidate){
   size_t nPlanes = planes.size();
   TrackEstimate<T,N> e;
   e.makeSeedInfo();
+  
   //Backward fitter, scattering included at plane, unbiased
   m_fitter.backward.at( nPlanes -1 ) = e;
   m_fitter.updateInfo( planes.at(nPlanes -1 ), candidate.indexes.at(nPlanes -1), e );
@@ -386,6 +388,7 @@ void TrackerSystem<T, N>::fitInfoBWBiased(TrackCandidate<T, N>& candidate){
   size_t nPlanes = planes.size();
   TrackEstimate<T,N> e;
   e.makeSeedInfo();
+
   //Backward fitter, scattering included at plane, biased
   m_fitter.updateInfo( planes.at(nPlanes -1 ), candidate.indexes.at(nPlanes -1), e );
   m_fitter.backward.at( nPlanes -1 ) = e;
@@ -429,15 +432,14 @@ template <typename T,size_t N>
 void TrackerSystem<T, N>::getChi2Kf(TrackCandidate<T, N>& candidate){
   //Get the chi2 for a standard formulated, unbiased KF
   T chi2(0.0), ndof(0.0);
-  Eigen::Matrix<T, 2, 1> resv;
-  Eigen::Matrix<T, 2, 1> errv;
+  Eigen::Matrix<T, 2, 1> resv, errv;
   for(int plane = 0; plane < (int) planes.size(); plane++){
-    FitPlane<T> & p = planes.at(plane);
+    auto& p = planes.at(plane);
     if(p.isExcluded()) { continue; }
     if(candidate.indexes.at(plane) < 0) { continue; }
     if(ndof < 1.5) { ndof+= 1.0; continue;}
-    Measurement<T>& m = p.meas.at( candidate.indexes.at(plane));
-    TrackEstimate<T, N>& est = m_fitter.forward.at(plane);
+    auto& m = p.meas.at( candidate.indexes.at(plane));
+    auto& est = m_fitter.forward.at(plane);
     resv = getResiduals(m, est).array().square();
     errv = getUnBiasedResidualErrors(p, est);
     chi2 += (resv.array() / errv.array()).sum();
@@ -463,7 +465,7 @@ void TrackerSystem<T, N>::getChi2BiasedInfo(TrackCandidate<T, N>& candidate){
     if(ndof < 1.5){ ndof += 1.0; continue;}
     ndof += 1.0;
 
-    Measurement<T> & m = planes.at(ii).meas.at(index);
+    auto& m = planes.at(ii).meas.at(index);
     estim = m_fitter.forward.at(ii);
     fastInvert(estim.cov);
     estim.params = estim.cov * estim.params;
@@ -492,7 +494,7 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfo(TrackCandidate<T, N>& candidate){
     if(ndof < 1.5){ ndof += 1.0; continue;}
     ndof += 1.0;
 
-    Measurement<T> & m = planes.at(ii).meas.at(index);
+    auto& m = planes.at(ii).meas.at(index);
     estim = m_fitter.forward.at(ii);
     fastInvert(estim.cov);
     estim.params = estim.cov * estim.params;
@@ -526,7 +528,7 @@ void TrackerSystem<T, N>::getChi2UnBiasedInfoDaf(TrackCandidate<T, N>& candidate
     fastInvert(estim.cov);
     estim.params = estim.cov * estim.params;
     for(size_t mm = 0; mm < planes.at(ii).meas.size(); mm++){
-      Measurement<T> & m = planes.at(ii).meas.at(mm);
+      auto& m = planes.at(ii).meas.at(mm);
       T weight = candidate.weights.at(ii)(mm);
       resv = getResiduals( m, estim ).array().square();
       errv = getUnBiasedResidualErrors( planes.at(ii), estim);
@@ -542,25 +544,23 @@ template <typename T,size_t N>
 void TrackerSystem<T, N>::intersect(){
   //Check where a straight line track intersects with a measurement plane, update the measurement z position
   for(int plane = 0; plane < (int) planes.size(); plane++ ){
-    FitPlane<T> & pl = planes.at(plane);
-    TrackEstimate<T, N>& estim = m_fitter.smoothed.at(plane);
+    auto& pl = planes.at(plane);
+    auto& estim = m_fitter.smoothed.at(plane);
     //Line intersects with plane where
     // d = (p0 - l0) . n / ( l . n )
     // p0 is refpoint in plane
-    Eigen::Matrix<T, 3, 1>& refPoint = pl.getRef0();
+    auto& refPoint = pl.getRef0();
     // n is vector normal of plane
-    Eigen::Matrix<T, 3, 1>& normVec = pl.getPlaneNorm();
+    auto& normVec = pl.getPlaneNorm();
     // l, point at line is defined by esimate x, y, and prev z
-    Eigen::Matrix<T, 3, 1> linePoint= Eigen::Matrix<T, 3, 1>( estim.getX(), estim.getY(), pl.getMeasZ() );
+    Eigen::Matrix<T, 3, 1> linePoint( estim.getX(), estim.getY(), pl.getMeasZ() );
     // l, unit direction of line is normal of dx/dz, dy/dz, 1.0
     Eigen::Matrix<T, 3, 1> lineDir( estim.getXdz(), estim.getYdz(), 1.0f);
     lineDir = lineDir.normalized();
     // p0 - l0
-    Eigen::Matrix<T, 3, 1> distance = refPoint - linePoint;
+    auto distance = refPoint - linePoint;
     T d = normVec.dot(distance) / normVec.dot(lineDir);
     //Propagate along track to track/plane intersection
-    //estim.params(0) += d * lineDir(0);
-    //estim.params(1) += d * lineDir(1);
     pl.setMeasZ( pl.getMeasZ() + d * lineDir(2));
   }
 }
@@ -639,8 +639,8 @@ T TrackerSystem<T, N>::fitPlanesInfoDafInner(TrackCandidate<T, N>& candidate){
   // Get smoothed estimates for all planes using the weighted information filter
   size_t nPlanes = planes.size();
   TrackEstimate<T,N> e;
-
   e.makeSeedInfo();
+
   //Forward fitter
   m_fitter.forward.at(0) = e;
   m_fitter.updateInfoDaf( planes.at(0), e, candidate.weights.at(0));
@@ -679,8 +679,8 @@ T TrackerSystem<T, N>::fitPlanesInfoDafBiased(TrackCandidate<T, N>& candidate){
 
   size_t nPlanes = planes.size();
   TrackEstimate<T,N> e;
-
   e.makeSeedInfo();
+
   //Forward fitter
   m_fitter.updateInfoDaf( planes.at(0), e, candidate.weights.at(0));
   m_fitter.forward.at(0) = e;
@@ -807,14 +807,14 @@ void TrackerSystem<T, N>::combinatorialKF(){
   TrackEstimate<T,N> e;
 
   //Check for tracks missing a hits in first planes plane 0
-  for(int ii = 0; ii < m_skipMax + 1; ii++){
+  for(size_t ii = 0; ii < m_skipMax + 1; ii++){
     if( ii > 0){ indexes.at(ii -1 ) = -1;}
-    for(int hit = 0; hit < (int)planes.at(ii).meas.size(); hit++){
+    for(size_t hit = 0; hit < planes.at(ii).meas.size(); hit++){
       if( ii > 0){
 	bool doContinue(false);
 	//Look for accepted track including hit
-	for(int track = 0; track < getNtracks() ; track++){
-	  if(tracks.at(track).indexes.at(ii) == hit){
+	for(size_t track = 0; track < getNtracks() ; track++){
+	  if(tracks.at(track).indexes.at(ii) == static_cast<int>(hit)){
 	    doContinue = true; break;
 	  }
 	}
@@ -854,7 +854,7 @@ void TrackerSystem<T, N>::finalizeCKFTrack(TrackEstimate<T, N>& est, vector<int>
 }
 
 template <typename T,size_t N>
-void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> &est, int nSkipped, vector<int> &indexes, int nMeas, T chi2){
+void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> &est, size_t nSkipped, vector<int> &indexes, int nMeas, T chi2){
   //Check a branch of the track tree. Either kill it or, let it live.
   if( getNtracks() >= m_maxCandidates){
     cout << "Reached maximum number of track candidates, " << m_maxCandidates << endl;
@@ -903,7 +903,7 @@ void TrackerSystem<T, N>::fitPermutation(int plane, TrackEstimate<T, N> &est, in
   }
 
   for(int hit = 0; hit < (int)planes.at(plane).meas.size(); hit++){
-    Measurement<T> & mm = planes.at(plane).meas.at(hit);
+    auto& mm = planes.at(plane).meas.at(hit);
     bool filterMeas = false;
     if( nMeas > 1) { 
       //If more than 1 measurements, get chi2
